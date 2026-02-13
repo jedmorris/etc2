@@ -1,0 +1,14 @@
+{
+  "webhooks": [
+    {
+      "slug": "health",
+      "description": "Health check endpoint",
+      "method": "GET"
+    },
+    {
+      "slug": "list_webhooks",
+      "description": "List all registered webhook endpoints",
+      "method": "GET"
+    }
+  ]
+}
