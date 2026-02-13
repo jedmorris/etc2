@@ -3,6 +3,7 @@ node_modules/
 app/node_modules/
 
 # Next.js
+.next/
 app/.next/
 app/out/
 
