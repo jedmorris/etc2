@@ -23,7 +23,7 @@ export async function GET() {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.ETSY_API_KEY!,
-    redirect_uri: process.env.ETSY_REDIRECT_URI!,
+    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/callback/etsy`,
     scope: 'transactions_r listings_r email_r profile_r shops_r',
     state,
     code_challenge: codeChallenge,

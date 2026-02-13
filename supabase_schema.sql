@@ -503,6 +503,58 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================
+-- NEWSLETTER SUBSCRIBERS (Beehiiv → Substack sync)
+-- ============================================
+CREATE TABLE newsletter_subscribers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  beehiiv_subscriber_id TEXT,
+  beehiiv_status TEXT NOT NULL DEFAULT 'active',       -- active, inactive, unsubscribed
+  substack_status TEXT NOT NULL DEFAULT 'pending',     -- pending, confirmation_sent, subscribed, failed, unsubscribed
+  tags JSONB DEFAULT '[]',
+  segments JSONB DEFAULT '[]',
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  beehiiv_created_at TIMESTAMPTZ,
+  synced_to_substack_at TIMESTAMPTZ,
+  last_webhook_at TIMESTAMPTZ,
+  error_message TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, email)
+);
+
+ALTER TABLE newsletter_subscribers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own newsletter subscribers" ON newsletter_subscribers FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX idx_newsletter_subs_user ON newsletter_subscribers(user_id);
+CREATE INDEX idx_newsletter_subs_email ON newsletter_subscribers(user_id, email);
+CREATE INDEX idx_newsletter_subs_beehiiv ON newsletter_subscribers(user_id, beehiiv_subscriber_id);
+CREATE INDEX idx_newsletter_subs_status ON newsletter_subscribers(user_id, substack_status);
+
+-- Newsletter sync log (tracks each sync attempt)
+CREATE TABLE newsletter_sync_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  subscriber_id UUID REFERENCES newsletter_subscribers(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,           -- subscribe, unsubscribe, reconcile
+  source TEXT NOT NULL,           -- beehiiv_webhook, substack_forward, reconciliation
+  status TEXT NOT NULL,           -- success, failed, skipped
+  error_message TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE newsletter_sync_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own newsletter sync log" ON newsletter_sync_log FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX idx_newsletter_sync_log_user ON newsletter_sync_log(user_id, created_at DESC);
+CREATE INDEX idx_newsletter_sync_log_sub ON newsletter_sync_log(subscriber_id);
+
 -- Apply updated_at triggers to all tables with updated_at
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON connected_accounts FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -513,3 +565,4 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON daily_financials FOR EACH ROW EXE
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON monthly_pnl FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON bestseller_candidates FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON printify_providers FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON newsletter_subscribers FOR EACH ROW EXECUTE FUNCTION update_updated_at();

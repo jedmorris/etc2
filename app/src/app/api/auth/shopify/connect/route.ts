@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({
     client_id: process.env.SHOPIFY_API_KEY!,
     scope: scopes,
-    redirect_uri: process.env.SHOPIFY_REDIRECT_URI!,
+    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/callback/shopify`,
     state,
   })
 

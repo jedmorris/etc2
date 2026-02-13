@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { encryptToken } from "@/lib/utils/crypto";
+import { cookies } from "next/headers";
 import crypto from "crypto";
 
 const WEBHOOK_TOPICS = [
@@ -75,6 +76,15 @@ export async function GET(request: NextRequest) {
 
     if (userError || !user) {
       return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // Validate CSRF state token
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("shopify_oauth_state")?.value;
+
+    if (!storedState || state !== storedState) {
+      redirectUrl.searchParams.set("error", "invalid_state");
+      return NextResponse.redirect(redirectUrl);
     }
 
     // Validate HMAC signature from Shopify
@@ -160,12 +170,16 @@ export async function GET(request: NextRequest) {
       console.error("Webhook registration failed:", err)
     );
 
+    // Build success redirect and clear OAuth cookies
     if (isOnboarding) {
       redirectUrl.searchParams.set("shopify_connected", "true");
     } else {
       redirectUrl.searchParams.set("connected", "shopify");
     }
-    return NextResponse.redirect(redirectUrl);
+    const response = NextResponse.redirect(redirectUrl);
+    response.cookies.delete("shopify_oauth_state");
+    response.cookies.delete("shopify_shop");
+    return response;
   } catch (error) {
     console.error("Shopify OAuth callback error:", error);
     redirectUrl.searchParams.set("error", "unexpected");

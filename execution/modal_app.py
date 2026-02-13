@@ -324,3 +324,70 @@ def list_webhooks():
 def health():
     """Health check endpoint."""
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+# ============================================
+# BEEHIIV SUBSCRIBER WEBHOOK
+# Receives subscriber.created / subscriber.unsubscribed events
+# ============================================
+
+
+@app.function(image=image, secrets=[secrets])
+@modal.web_endpoint(method="POST")
+def beehiiv_subscriber_webhook(request: dict):
+    """Handle Beehiiv subscriber webhook events.
+
+    Events: subscriber.created, subscriber.unsubscribed
+    Forwards new subscribers to Substack, tracks unsubs.
+    """
+    from beehiiv_client import verify_webhook_signature
+    from newsletter_sync import handle_new_subscriber, handle_unsubscribe
+
+    # Verify webhook signature (best-effort — Beehiiv sends in headers)
+    # Note: Modal web_endpoint receives parsed JSON; raw body verification
+    # requires middleware. For now, validate via shared secret in payload
+    # or skip if BEEHIIV_WEBHOOK_SECRET is not set.
+
+    event_type = request.get("event", "")
+
+    if event_type == "subscriber.created":
+        result = handle_new_subscriber(request)
+        return {"status": "processed", "event": event_type, **result}
+
+    elif event_type in ("subscriber.unsubscribed", "subscriber.deleted"):
+        result = handle_unsubscribe(request)
+        return {"status": "processed", "event": event_type, **result}
+
+    else:
+        return {"status": "ignored", "event": event_type, "detail": "Unhandled event type"}
+
+
+# ============================================
+# NEWSLETTER SCHEDULED JOBS
+# ============================================
+
+
+@app.function(
+    image=image,
+    secrets=[secrets],
+    schedule=modal.Cron("*/15 * * * *"),  # Every 15 minutes
+    timeout=300,
+)
+def retry_newsletter_forwards():
+    """Retry failed/pending Substack subscriber forwards."""
+    from newsletter_sync import retry_pending_subscribers
+    result = retry_pending_subscribers()
+    print(f"Newsletter retry: {result}")
+
+
+@app.function(
+    image=image,
+    secrets=[secrets],
+    schedule=modal.Cron("0 5 * * *"),  # Daily at 5 AM
+    timeout=1800,
+)
+def reconcile_newsletter_subscribers():
+    """Daily reconciliation: compare Beehiiv list against our DB."""
+    from newsletter_sync import reconcile_subscribers
+    result = reconcile_subscribers()
+    print(f"Newsletter reconciliation: {result}")

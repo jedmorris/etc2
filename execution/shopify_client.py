@@ -6,6 +6,7 @@ Loads per-user tokens, uses GraphQL Admin API.
 import httpx
 from token_manager import load_tokens
 from retry import retry_request
+import supabase_client as sb
 
 GRAPHQL_API_VERSION = "2024-10"
 
@@ -14,7 +15,9 @@ class ShopifyClient:
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.tokens = load_tokens(user_id, "shopify")
-        self.shop_domain = self.tokens.get("shop_id", "")
+        # Load shop domain from connected_accounts (platform_shop_id)
+        account = sb.get_connected_account(user_id, "shopify")
+        self.shop_domain = account.get("platform_shop_id", "") if account else ""
         self.base_url = f"https://{self.shop_domain}/admin/api/{GRAPHQL_API_VERSION}"
         self._client = httpx.Client(timeout=30)
 

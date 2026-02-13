@@ -9,6 +9,13 @@
       "slug": "list_webhooks",
       "description": "List all registered webhook endpoints",
       "method": "GET"
+    },
+    {
+      "slug": "beehiiv_subscriber_webhook",
+      "description": "Beehiiv subscriber events (created, unsubscribed) → Substack sync",
+      "method": "POST",
+      "directive": "newsletter_subscriber_sync",
+      "events": ["subscriber.created", "subscriber.unsubscribed"]
     }
   ]
 }

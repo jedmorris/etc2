@@ -6,6 +6,7 @@ Loads per-user Personal Access Tokens.
 import httpx
 from token_manager import load_tokens
 from retry import retry_request
+import supabase_client as sb
 
 BASE_URL = "https://api.printify.com/v1"
 
@@ -14,7 +15,9 @@ class PrintifyClient:
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.tokens = load_tokens(user_id, "printify")
-        self.shop_id = self.tokens.get("shop_id", "")
+        # Load shop_id from connected_accounts (platform_shop_id)
+        account = sb.get_connected_account(user_id, "printify")
+        self.shop_id = account.get("platform_shop_id", "") if account else ""
         self._client = httpx.Client(timeout=30)
 
     def _headers(self) -> dict:
