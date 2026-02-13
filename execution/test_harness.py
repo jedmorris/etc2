@@ -23,7 +23,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 MOCK_MODULES = [
     "httpx", "modal", "stripe",
     "supabase", "supabase.client",
-    "dotenv", "cryptography", "cryptography.fernet",
+    "dotenv",
+    "cryptography",
+    "cryptography.fernet",
+    "cryptography.hazmat",
+    "cryptography.hazmat.primitives",
+    "cryptography.hazmat.primitives.ciphers",
+    "cryptography.hazmat.primitives.ciphers.aead",
 ]
 
 for mod_name in MOCK_MODULES:
@@ -35,6 +41,8 @@ for mod_name in MOCK_MODULES:
         elif mod_name == "cryptography.fernet":
             mock.Fernet = MagicMock()
             mock.InvalidToken = Exception
+        elif mod_name == "cryptography.hazmat.primitives.ciphers.aead":
+            mock.AESGCM = MagicMock()
         elif mod_name == "modal":
             mock.App = MagicMock()
             mock.Image = MagicMock()
@@ -50,6 +58,8 @@ for mod_name in MOCK_MODULES:
 # Mock supabase_client module (the local one) before other modules import it
 mock_sb = ModuleType("supabase_client")
 mock_sb.get_client = MagicMock(return_value=MagicMock())
+mock_sb.get_connected_account = MagicMock(return_value={"platform_shop_id": "test-shop-123"})
+mock_sb.get_user_profile = MagicMock(return_value=None)
 sys.modules["supabase_client"] = mock_sb
 
 PASS = "\033[92mPASS\033[0m"
