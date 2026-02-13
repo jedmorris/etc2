@@ -257,7 +257,24 @@ def _execute_sync(user_id: str, job_type: str) -> int:
 
 
 def _schedule_next(db, user_id: str, job_type: str):
-    """Schedule the next sync run based on user's plan."""
+    """Schedule the next sync run based on user's plan.
+
+    Skips insertion if there is already a queued job with the same
+    (user_id, job_type) to prevent unbounded duplicate accumulation.
+    """
+    # Check for existing queued job
+    existing = (
+        db.table("sync_jobs")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("job_type", job_type)
+        .eq("status", "queued")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return  # Already have a queued job — don't duplicate
+
     result = db.table("profiles").select("plan").eq("user_id", user_id).maybe_single().execute()
     plan = result.data["plan"] if result.data else "free"
 

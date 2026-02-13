@@ -75,12 +75,11 @@ def run(user_id: str) -> int:
             if order.data:
                 fee_data["order_id"] = order.data["id"]
 
-        if fee_data.get("order_id"):
-            db.table("platform_fees").upsert(
-                fee_data,
-                on_conflict="user_id,platform_ledger_entry_id",
-            ).execute()
-            synced += 1
+        db.table("platform_fees").upsert(
+            fee_data,
+            on_conflict="user_id,platform_ledger_entry_id",
+        ).execute()
+        synced += 1
 
         created_ts = entry.get("create_date")
         if created_ts and (not latest_ts or created_ts > latest_ts):

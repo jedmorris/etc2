@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "authorization_code",
-          client_id: process.env.ETSY_CLIENT_ID!,
+          client_id: process.env.ETSY_API_KEY!,
           redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/callback/etsy`,
           code,
           code_verifier: codeVerifier,
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     const meResponse = await fetch(`${ETSY_API_URL}/application/users/me`, {
       headers: {
         Authorization: `Bearer ${tokens.access_token}`,
-        "x-api-key": process.env.ETSY_CLIENT_ID!,
+        "x-api-key": process.env.ETSY_API_KEY!,
       },
     });
 

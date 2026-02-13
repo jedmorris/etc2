@@ -11,7 +11,7 @@ function getServiceClient() {
 }
 
 function verifyShopifyHmac(body: string, hmac: string): boolean {
-  const secret = process.env.SHOPIFY_CLIENT_SECRET
+  const secret = process.env.SHOPIFY_API_SECRET
   if (!secret) return false
   const hash = crypto
     .createHmac('sha256', secret)

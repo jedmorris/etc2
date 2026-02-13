@@ -1,11 +1,17 @@
 """
 Per-user OAuth token encryption, storage, and refresh for etC2.
 
-Tokens are encrypted at rest using Fernet (AES-128-CBC under the hood,
-with HMAC-SHA256 authentication -- effectively AES-256 total key
-material).  The symmetric key lives in ``TOKEN_ENCRYPTION_KEY`` and
-must be a valid Fernet key (32 bytes, url-safe base64-encoded via
-``Fernet.generate_key()``).
+Tokens are encrypted at rest using AES-256-GCM.  The symmetric key
+lives in ``TOKEN_ENCRYPTION_KEY`` and must be a 32-byte hex-encoded
+string (64 hex chars).  Generate one with::
+
+    python -c "import secrets; print(secrets.token_hex(32))"
+
+The wire format matches the TypeScript layer (``crypto.ts``):
+``base64(iv[12] + authTag[16] + ciphertext)``.
+
+Legacy Fernet-encrypted tokens are auto-detected and decrypted as a
+fallback so existing rows don't break during the migration window.
 
 Typical flow
 ------------
@@ -26,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from dotenv import load_dotenv
 
 import supabase_client as sb
@@ -34,47 +40,80 @@ import supabase_client as sb
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Encryption primitives
+# Encryption primitives  (AES-256-GCM, matching TS crypto.ts)
 # ---------------------------------------------------------------------------
 
-_fernet: Fernet | None = None
+_aesgcm: AESGCM | None = None
+
+IV_LENGTH = 12
+TAG_LENGTH = 16
 
 
-def _get_fernet() -> Fernet:
-    """Lazy-init a Fernet instance from the env var."""
-    global _fernet
-    if _fernet is None:
+def _get_aesgcm() -> AESGCM:
+    """Lazy-init an AESGCM instance from the hex-encoded env var."""
+    global _aesgcm
+    if _aesgcm is None:
         raw_key = os.environ["TOKEN_ENCRYPTION_KEY"]
-        # Accept either a raw Fernet key or a plain base64-encoded
-        # 32-byte key.  Fernet keys are already url-safe base64.
-        try:
-            _fernet = Fernet(raw_key.encode())
-        except (ValueError, Exception):
-            # Caller may have set a plain 32-byte base64 value.
-            # Fernet expects url-safe base64 of 32 bytes (= 44 chars).
-            decoded = base64.urlsafe_b64decode(raw_key)
-            if len(decoded) != 32:
-                raise ValueError(
-                    "TOKEN_ENCRYPTION_KEY must be a 32-byte key "
-                    "encoded as url-safe base64 (use Fernet.generate_key())."
-                )
-            _fernet = Fernet(base64.urlsafe_b64encode(decoded))
-    return _fernet
+        key_bytes = bytes.fromhex(raw_key)
+        if len(key_bytes) != 32:
+            raise ValueError(
+                "TOKEN_ENCRYPTION_KEY must be 32 bytes (64 hex chars)."
+            )
+        _aesgcm = AESGCM(key_bytes)
+    return _aesgcm
 
 
 def encrypt_token(plaintext: str) -> str:
-    """Encrypt *plaintext* and return a base64-encoded ciphertext string."""
-    token_bytes = _get_fernet().encrypt(plaintext.encode("utf-8"))
-    return token_bytes.decode("utf-8")
+    """Encrypt *plaintext* with AES-256-GCM.
+
+    Returns base64(iv + authTag + ciphertext) matching the TS layer.
+    """
+    aesgcm = _get_aesgcm()
+    iv = os.urandom(IV_LENGTH)
+    # AESGCM.encrypt returns ciphertext + tag (tag appended)
+    ct_and_tag = aesgcm.encrypt(iv, plaintext.encode("utf-8"), None)
+    ciphertext = ct_and_tag[:-TAG_LENGTH]
+    tag = ct_and_tag[-TAG_LENGTH:]
+    # TS format: iv (12) + tag (16) + ciphertext
+    combined = iv + tag + ciphertext
+    return base64.b64encode(combined).decode("utf-8")
 
 
 def decrypt_token(ciphertext: str) -> str:
     """Decrypt a base64-encoded *ciphertext* back to plaintext.
 
-    Raises ``cryptography.fernet.InvalidToken`` if the key is wrong
-    or the data has been tampered with.
+    Accepts the AES-256-GCM format (iv+tag+ct) produced by both
+    this module and the TS ``encryptToken()``.  Falls back to
+    legacy Fernet if the payload looks like a Fernet token.
     """
-    plaintext_bytes = _get_fernet().decrypt(ciphertext.encode("utf-8"))
+    raw = ciphertext.encode("utf-8")
+
+    # --- Legacy Fernet fallback ---
+    # Fernet tokens always start with "gAAAAA" (version byte 0x80
+    # followed by 8-byte timestamp, base64-encoded).
+    if raw.startswith(b"gAAAAA"):
+        try:
+            from cryptography.fernet import Fernet
+
+            fernet_key = os.environ["TOKEN_ENCRYPTION_KEY"]
+            # Fernet expects url-safe-base64 of 32 bytes.  If the key
+            # is hex, convert it.
+            try:
+                f = Fernet(fernet_key.encode())
+            except Exception:
+                key_bytes = bytes.fromhex(fernet_key)
+                f = Fernet(base64.urlsafe_b64encode(key_bytes))
+            return f.decrypt(raw).decode("utf-8")
+        except Exception:
+            pass  # Fall through to AES-GCM attempt
+
+    # --- AES-256-GCM (primary path) ---
+    combined = base64.b64decode(raw)
+    iv = combined[:IV_LENGTH]
+    tag = combined[IV_LENGTH : IV_LENGTH + TAG_LENGTH]
+    ct = combined[IV_LENGTH + TAG_LENGTH :]
+    # AESGCM.decrypt expects ciphertext + tag
+    plaintext_bytes = _get_aesgcm().decrypt(iv, ct + tag, None)
     return plaintext_bytes.decode("utf-8")
 
 
@@ -110,11 +149,11 @@ def store_tokens(
     payload: dict[str, Any] = {
         "user_id": user_id,
         "platform": platform,
-        "access_token_enc": encrypt_token(access_token),
+        "access_token_encrypted": encrypt_token(access_token),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     if refresh_token is not None:
-        payload["refresh_token_enc"] = encrypt_token(refresh_token)
+        payload["refresh_token_encrypted"] = encrypt_token(refresh_token)
     if expires_at is not None:
         payload["token_expires_at"] = expires_at
 
@@ -141,13 +180,13 @@ def load_tokens(user_id: str, platform: str) -> dict[str, Any] | None:
     result: dict[str, Any] = {
         "user_id": user_id,
         "platform": platform,
-        "access_token": decrypt_token(row["access_token_enc"]),
+        "access_token": decrypt_token(row["access_token_encrypted"]),
         "refresh_token": None,
         "expires_at": row.get("token_expires_at"),
     }
 
-    if row.get("refresh_token_enc"):
-        result["refresh_token"] = decrypt_token(row["refresh_token_enc"])
+    if row.get("refresh_token_encrypted"):
+        result["refresh_token"] = decrypt_token(row["refresh_token_encrypted"])
 
     return result
 

@@ -47,7 +47,7 @@ def get_user_profile(user_id: str) -> dict[str, Any] | None:
         get_client()
         .table("profiles")
         .select("*")
-        .eq("id", user_id)
+        .eq("user_id", user_id)
         .maybe_single()
         .execute()
     )
@@ -108,9 +108,9 @@ def insert_sync_log(
     platform: str,
     sync_type: str,
     status: str = "started",
-    details: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Insert a row into ``sync_logs`` and return it.
+    """Insert a row into ``sync_log`` and return it.
 
     Parameters
     ----------
@@ -122,7 +122,7 @@ def insert_sync_log(
         A short label like "orders", "listings", "inventory".
     status:
         Initial status -- typically "started".
-    details:
+    metadata:
         Arbitrary JSON payload (error messages, counts, etc.).
     """
     row = {
@@ -130,10 +130,10 @@ def insert_sync_log(
         "platform": platform,
         "sync_type": sync_type,
         "status": status,
-        "details": details or {},
+        "metadata": metadata or {},
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
-    resp = get_client().table("sync_logs").insert(row).execute()
+    resp = get_client().table("sync_log").insert(row).execute()
     return resp.data[0] if resp.data else row
 
 
@@ -166,14 +166,14 @@ def update_sync_job_status(
     """Update the status (and optional details) of a sync job.
 
     Common status transitions: queued -> running -> completed | failed.
-    If ``status`` is "completed" or "failed", ``finished_at`` is set
+    If ``status`` is "completed" or "failed", ``completed_at`` is set
     automatically.
     """
     payload: dict[str, Any] = {"status": status}
     if details is not None:
-        payload["details"] = details
+        payload["metadata"] = details
     if status in ("completed", "failed"):
-        payload["finished_at"] = datetime.now(timezone.utc).isoformat()
+        payload["completed_at"] = datetime.now(timezone.utc).isoformat()
 
     resp = (
         get_client()

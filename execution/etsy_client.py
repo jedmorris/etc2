@@ -3,10 +3,12 @@ Etsy API v3 Client - Multi-tenant wrapper.
 Loads per-user OAuth tokens, handles pagination, respects rate limits.
 """
 
+import os
 import httpx
 from token_manager import load_tokens, refresh_etsy_token
 from retry import retry_request
 import rate_limiter
+import supabase_client as sb
 
 BASE_URL = "https://api.etsy.com/v3/application"
 
@@ -15,13 +17,15 @@ class EtsyClient:
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.tokens = load_tokens(user_id, "etsy")
-        self.shop_id = self.tokens.get("shop_id")
+        # Load shop_id from connected_accounts (platform_shop_id)
+        account = sb.get_connected_account(user_id, "etsy")
+        self.shop_id = account.get("platform_shop_id") if account else None
         self._client = httpx.Client(timeout=30)
 
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self.tokens['access_token']}",
-            "x-api-key": self.tokens.get("api_key", ""),
+            "x-api-key": os.environ["ETSY_API_KEY"],
         }
 
     def _request(self, method: str, path: str, **kwargs) -> dict:

@@ -308,7 +308,7 @@ CREATE POLICY "Users see own bestsellers" ON bestseller_candidates FOR ALL USING
 CREATE TABLE platform_fees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
   platform_ledger_entry_id TEXT,
   fee_type TEXT NOT NULL,
   amount_cents INTEGER NOT NULL,
@@ -445,6 +445,25 @@ ALTER TABLE sync_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own sync logs" ON sync_log FOR ALL USING (auth.uid() = user_id);
 
 CREATE INDEX idx_sync_log_user ON sync_log(user_id, started_at DESC);
+
+-- ============================================
+-- RATE LIMIT TRACKING
+-- ============================================
+CREATE TABLE rate_limit_tracking (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  platform TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(date, platform, user_id)
+);
+
+ALTER TABLE rate_limit_tracking ENABLE ROW LEVEL SECURITY;
+-- Service-role only — no user-facing access needed
+CREATE POLICY "Service role only" ON rate_limit_tracking FOR ALL USING (false);
+
+CREATE INDEX idx_rate_limit_date ON rate_limit_tracking(date);
 
 -- ============================================
 -- DATABASE FUNCTIONS

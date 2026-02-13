@@ -8,8 +8,26 @@ from supabase import Client
 import rate_limiter
 
 
+def _cleanup_stale_jobs(db: Client, stale_minutes: int = 15) -> None:
+    """Mark jobs stuck in 'running' for longer than *stale_minutes* as failed.
+
+    This handles crashed workers that never reported back.
+    """
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
+    ).isoformat()
+
+    db.table("sync_jobs").update({
+        "status": "failed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "error_message": f"Stale: still running after {stale_minutes} min",
+    }).eq("status", "running").lt("started_at", cutoff).execute()
+
+
 def process_next_batch(db: Client, batch_size: int = 10):
     """Pick up the next batch of queued sync jobs and process them."""
+    _cleanup_stale_jobs(db)
+
     now = datetime.now(timezone.utc).isoformat()
 
     # Fetch queued jobs that are ready to run

@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       params.sort();
       const message = params.toString();
       const expectedHmac = crypto
-        .createHmac("sha256", process.env.SHOPIFY_CLIENT_SECRET!)
+        .createHmac("sha256", process.env.SHOPIFY_API_SECRET!)
         .update(message)
         .digest("hex");
       if (hmac !== expectedHmac) {
@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          client_id: process.env.SHOPIFY_CLIENT_ID!,
-          client_secret: process.env.SHOPIFY_CLIENT_SECRET!,
+          client_id: process.env.SHOPIFY_API_KEY!,
+          client_secret: process.env.SHOPIFY_API_SECRET!,
           code,
         }),
       }
