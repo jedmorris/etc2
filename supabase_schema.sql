@@ -55,6 +55,7 @@ CREATE TABLE connected_accounts (
   status TEXT NOT NULL DEFAULT 'connected',
   access_token_encrypted TEXT,
   refresh_token_encrypted TEXT,
+  webhook_secret_encrypted TEXT,
   token_expires_at TIMESTAMPTZ,
   scopes TEXT[],
   last_sync_at TIMESTAMPTZ,

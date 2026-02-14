@@ -109,22 +109,48 @@ export async function POST(request: NextRequest) {
 
   // Map Etsy events to sync job types
   const EVENT_MAP: Record<string, string> = {
+    // Order events
     'order.paid': 'etsy_orders',
+    'order.shipped': 'etsy_orders',
+    'order.completed': 'etsy_orders',
+    'order.refunded': 'etsy_orders',
+    'shop.receipt.created': 'etsy_orders',
+    'shop.receipt.updated': 'etsy_orders',
+    // Listing events
+    'listing.active': 'etsy_listings',
+    'listing.inactive': 'etsy_listings',
+    'listing.updated': 'etsy_listings',
+    'listing.created': 'etsy_listings',
+    'listing.removed': 'etsy_listings',
+    // Payment events
+    'payment.completed': 'etsy_payments',
+    'shop.payment.completed': 'etsy_payments',
   }
 
   const jobType = EVENT_MAP[eventType]
   if (jobType) {
-    await supabase.from('sync_jobs').insert({
-      user_id: account.user_id,
-      job_type: jobType,
-      priority: 10,
-      metadata: {
-        trigger: 'webhook',
-        event: eventType,
-        event_id: payload.event_id,
-        resource_url: payload.data?.resource_url,
-      },
-    })
+    // Avoid duplicate sync jobs for the same event by checking for recent webhook-triggered jobs
+    const { data: existing } = await supabase
+      .from('sync_jobs')
+      .select('id')
+      .eq('user_id', account.user_id)
+      .eq('job_type', jobType)
+      .eq('status', 'queued')
+      .limit(1)
+
+    if (!existing?.length) {
+      await supabase.from('sync_jobs').insert({
+        user_id: account.user_id,
+        job_type: jobType,
+        priority: 10,
+        metadata: {
+          trigger: 'webhook',
+          event: eventType,
+          event_id: payload.event_id,
+          resource_url: payload.data?.resource_url,
+        },
+      })
+    }
   }
 
   return NextResponse.json({ received: true })

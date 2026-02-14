@@ -1,21 +1,54 @@
 """
 Printify Order Sync Worker.
+Uses sync_cursor.printify_orders_last_ts to only fetch orders updated since last sync.
 """
 
+import logging
 from datetime import datetime, timezone
 from printify_client import PrintifyClient
-from supabase_client import get_client
+import supabase_client as sb
+
+log = logging.getLogger(__name__)
+
+
+def _load_cursor(db, user_id: str) -> dict:
+    """Load the sync cursor from connected_accounts."""
+    account = sb.get_connected_account(user_id, "printify")
+    return (account or {}).get("sync_cursor") or {}
+
+
+def _save_cursor(db, user_id: str, cursor: dict) -> None:
+    """Persist the sync cursor back to connected_accounts."""
+    db.table("connected_accounts").update({
+        "sync_cursor": cursor,
+    }).eq("user_id", user_id).eq("platform", "printify").execute()
 
 
 def run(user_id: str) -> int:
-    """Sync Printify orders for user."""
-    db = get_client()
+    """Sync Printify orders for user. Uses cursor for incremental sync."""
+    db = sb.get_client()
+    cursor = _load_cursor(db, user_id)
+    last_ts = cursor.get("printify_orders_last_ts")
 
     with PrintifyClient(user_id) as client:
         all_orders = client.get_all_orders()
 
+    # Filter to only orders updated since last sync
+    if last_ts:
+        all_orders = [
+            o for o in all_orders
+            if (o.get("updated_at") or o.get("created_at", "")) > last_ts
+        ]
+
+    log.info("user=%s printify_orders: %d orders to sync (cursor=%s)", user_id, len(all_orders), last_ts)
+
     synced = 0
+    newest_ts = last_ts
     for order in all_orders:
+        # Track the newest timestamp we've seen
+        order_ts = order.get("updated_at") or order.get("created_at", "")
+        if order_ts and (not newest_ts or order_ts > newest_ts):
+            newest_ts = order_ts
         printify_id = order.get("id", "")
 
         # Check if there's a matching Etsy/Shopify order to link
@@ -69,6 +102,11 @@ def run(user_id: str) -> int:
             on_conflict="user_id,platform,platform_order_id",
         ).execute()
         synced += 1
+
+    # Save cursor for next incremental sync
+    if newest_ts and newest_ts != last_ts:
+        cursor["printify_orders_last_ts"] = newest_ts
+        _save_cursor(db, user_id, cursor)
 
     return synced
 

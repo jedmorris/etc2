@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import crypto from 'crypto'
+import { decryptToken } from '@/lib/utils/crypto'
 
 function getServiceClient() {
   return createServerClient(
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   // Look up the user's connected Printify account and verify webhook secret
   const { data: account } = await supabase
     .from('connected_accounts')
-    .select('user_id, sync_cursor')
+    .select('user_id, webhook_secret_encrypted, sync_cursor')
     .eq('user_id', uid)
     .eq('platform', 'printify')
     .eq('status', 'connected')
@@ -50,8 +51,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown user or not connected' }, { status: 404 })
   }
 
-  // Verify the webhook secret stored in sync_cursor.webhook_secret
-  const storedSecret = (account.sync_cursor as Record<string, string> | null)?.webhook_secret ?? null
+  // Decrypt webhook secret from dedicated encrypted field, fallback to legacy sync_cursor
+  let storedSecret: string | null = null
+  if (account.webhook_secret_encrypted) {
+    try {
+      storedSecret = decryptToken(account.webhook_secret_encrypted)
+    } catch {
+      storedSecret = null
+    }
+  }
+  if (!storedSecret) {
+    // Legacy fallback: read from sync_cursor (plaintext)
+    storedSecret = (account.sync_cursor as Record<string, string> | null)?.webhook_secret ?? null
+  }
+
   if (!verifySecret(secret, storedSecret)) {
     return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 })
   }

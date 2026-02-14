@@ -60,6 +60,7 @@ export interface Database {
           status: string
           access_token_encrypted: string | null
           refresh_token_encrypted: string | null
+          webhook_secret_encrypted: string | null
           token_expires_at: string | null
           scopes: string[] | null
           last_sync_at: string | null

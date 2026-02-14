@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Generate a webhook secret for verifying incoming webhooks
     const webhookSecret = generateSecret()
+    const encryptedWebhookSecret = encryptToken(webhookSecret)
 
     // Store connection with encrypted token and webhook secret
     const { error } = await supabase
@@ -91,8 +92,8 @@ export async function POST(request: NextRequest) {
         platform_shop_name: shop.title,
         status: 'connected',
         access_token_encrypted: encryptedToken,
+        webhook_secret_encrypted: encryptedWebhookSecret,
         connected_at: new Date().toISOString(),
-        sync_cursor: { webhook_secret: webhookSecret },
       }, {
         onConflict: 'user_id,platform',
       })
