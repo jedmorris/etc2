@@ -71,7 +71,17 @@ function EmptyState() {
   );
 }
 
-export default async function FinancialsPage() {
+const DATE_PRESETS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+] as const;
+
+export default async function FinancialsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -84,7 +94,7 @@ export default async function FinancialsPage() {
     .from("profiles")
     .select("plan")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
 
@@ -92,24 +102,29 @@ export default async function FinancialsPage() {
     return <UpgradePrompt />;
   }
 
-  // Calculate date range: last 30 days
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
-
-  // Current month boundaries
+  const params = await searchParams;
   const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+
+  // Parse date range from params, default to last 30 days
+  const defaultFrom = new Date();
+  defaultFrom.setDate(defaultFrom.getDate() - 30);
+  const fromStr = params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) ? params.from : defaultFrom.toISOString().split("T")[0];
+  const toStr = params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to) ? params.to : todayStr;
+
+  // Current month boundaries for P&L
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
   const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
 
-  // Fetch daily financials for last 30 days and monthly P&L in parallel
+  // Fetch daily financials for date range and monthly P&L in parallel
   const [dailyResult, monthlyResult] = await Promise.all([
     supabase
       .from("daily_financials")
       .select("*")
       .eq("user_id", user.id)
-      .gte("date", thirtyDaysAgoStr)
+      .gte("date", fromStr)
+      .lte("date", toStr)
       .order("date", { ascending: true }),
     supabase
       .from("monthly_pnl")
@@ -209,22 +224,65 @@ export default async function FinancialsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Financials</h1>
           <p className="text-muted-foreground">
             Profit &amp; loss overview for your business.
           </p>
         </div>
-        <a
-          href={`/api/financials/export?from=${thirtyDaysAgoStr}&to=${new Date().toISOString().split("T")[0]}`}
-          download
-        >
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 size-4" />
-            Export CSV
-          </Button>
-        </a>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Date range presets */}
+          {DATE_PRESETS.map((preset) => {
+            const presetFrom = new Date();
+            presetFrom.setDate(presetFrom.getDate() - preset.days);
+            const pFrom = presetFrom.toISOString().split("T")[0];
+            const isActive = fromStr === pFrom && toStr === todayStr;
+            return (
+              <Link
+                key={preset.days}
+                href={`/app/financials?from=${pFrom}&to=${todayStr}`}
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-accent hover:text-accent-foreground"
+                }`}
+              >
+                {preset.label}
+              </Link>
+            );
+          })}
+
+          {/* Custom date inputs */}
+          <form action="/app/financials" method="GET" className="flex items-center gap-1">
+            <input
+              type="date"
+              name="from"
+              defaultValue={fromStr}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <input
+              type="date"
+              name="to"
+              defaultValue={toStr}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            />
+            <Button type="submit" variant="outline" size="sm" className="h-8">
+              Apply
+            </Button>
+          </form>
+
+          <a
+            href={`/api/financials/export?from=${fromStr}&to=${toStr}`}
+            download
+          >
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 size-4" />
+              Export CSV
+            </Button>
+          </a>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -255,7 +313,7 @@ export default async function FinancialsPage() {
 
       {/* Revenue Chart */}
       {chartData.length > 0 && (
-        <RevenueChart data={chartData} title="Revenue (Last 30 Days)" />
+        <RevenueChart data={chartData} title={`Revenue (${fromStr} – ${toStr})`} />
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -264,7 +322,7 @@ export default async function FinancialsPage() {
           <CardHeader>
             <CardTitle>Fee Breakdown</CardTitle>
             <CardDescription>
-              Where your fees go (last 30 days)
+              Where your fees go ({fromStr} – {toStr})
             </CardDescription>
           </CardHeader>
           <CardContent>

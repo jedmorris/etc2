@@ -91,10 +91,12 @@ const statusFilters = [
   { label: "Cancelled", value: "cancelled" },
 ] as const
 
+const PAGE_SIZE = 50
+
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ platform?: string; status?: string; q?: string }>
+  searchParams: Promise<{ platform?: string; status?: string; q?: string; page?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -104,6 +106,22 @@ export default async function OrdersPage({
   const platformFilter = params.platform ?? ""
   const statusFilter = params.status ?? ""
   const searchQuery = params.q ?? ""
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
+  const offset = (page - 1) * PAGE_SIZE
+
+  // Build count query for total
+  let countQuery = supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+
+  if (platformFilter) countQuery = countQuery.eq("platform", platformFilter)
+  if (statusFilter) countQuery = countQuery.eq("status", statusFilter)
+  if (searchQuery) countQuery = countQuery.ilike("platform_order_number", `%${searchQuery}%`)
+
+  const { count: totalCount } = await countQuery
+  const total = totalCount ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   // Build query
   let query = supabase
@@ -111,7 +129,7 @@ export default async function OrdersPage({
     .select("id, platform_order_number, platform, status, fulfillment_status, total_cents, ordered_at")
     .eq("user_id", user.id)
     .order("ordered_at", { ascending: false })
-    .limit(50)
+    .range(offset, offset + PAGE_SIZE - 1)
 
   if (platformFilter) {
     query = query.eq("platform", platformFilter)
@@ -128,13 +146,19 @@ export default async function OrdersPage({
 
   // Build filter URL helper
   function filterUrl(overrides: Record<string, string>) {
-    const merged = { platform: platformFilter, status: statusFilter, q: searchQuery, ...overrides }
+    const merged: Record<string, string> = { platform: platformFilter, status: statusFilter, q: searchQuery, ...overrides }
+    // Reset to page 1 when filters change (unless page is explicitly set)
+    if (!overrides.page) delete merged.page
     const sp = new URLSearchParams()
     for (const [k, v] of Object.entries(merged)) {
       if (v) sp.set(k, v)
     }
     const qs = sp.toString()
     return `/app/orders${qs ? `?${qs}` : ""}`
+  }
+
+  function pageUrl(p: number) {
+    return filterUrl({ page: String(p) })
   }
 
   return (
@@ -152,7 +176,7 @@ export default async function OrdersPage({
             <div>
               <CardTitle>Order History</CardTitle>
               <CardDescription>
-                {orderList.length} order{orderList.length !== 1 ? "s" : ""}
+                {total} order{total !== 1 ? "s" : ""}
               </CardDescription>
             </div>
             <form action="/app/orders" method="GET">
@@ -204,6 +228,7 @@ export default async function OrdersPage({
           </div>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -262,6 +287,34 @@ export default async function OrdersPage({
               )}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t pt-4 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+              </p>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link
+                    href={pageUrl(page - 1)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Previous
+                  </Link>
+                )}
+                {page < totalPages && (
+                  <Link
+                    href={pageUrl(page + 1)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Next
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -19,6 +19,7 @@ import {
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -180,6 +181,9 @@ export function AppHeader({
           <Separator orientation="vertical" className="h-6" />
         </div>
       )}
+
+      {/* Theme toggle */}
+      <ThemeToggle />
 
       {/* User avatar dropdown */}
       <DropdownMenu>

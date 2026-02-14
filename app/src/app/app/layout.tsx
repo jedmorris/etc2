@@ -25,7 +25,7 @@ export default async function DashboardLayout({
     .from("profiles")
     .select("*")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
   const userEmail = user.email ?? "";

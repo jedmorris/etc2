@@ -85,7 +85,13 @@ function UpgradePrompt() {
   );
 }
 
-export default async function CustomersPage() {
+const PAGE_SIZE = 50;
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -99,7 +105,7 @@ export default async function CustomersPage() {
     .from("profiles")
     .select("plan")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
 
@@ -107,12 +113,24 @@ export default async function CustomersPage() {
     return <UpgradePrompt />;
   }
 
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const { count: totalCount } = await supabase
+    .from("customers")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  const total = totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const { data: customers } = await supabase
     .from("customers")
     .select("*")
     .eq("user_id", user.id)
     .order("total_spent_cents", { ascending: false })
-    .limit(50);
+    .range(offset, offset + PAGE_SIZE - 1);
 
   const customerList = customers ?? [];
 
@@ -127,7 +145,7 @@ export default async function CustomersPage() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Users className="size-4" />
-          {formatNumber(customerList.length)} total
+          {formatNumber(total)} total
         </div>
       </div>
 
@@ -146,6 +164,7 @@ export default async function CustomersPage() {
               sync.
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -189,6 +208,34 @@ export default async function CustomersPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t pt-4 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+              </p>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link
+                    href={`/app/customers${page > 2 ? `?page=${page - 1}` : ""}`}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Previous
+                  </Link>
+                )}
+                {page < totalPages && (
+                  <Link
+                    href={`/app/customers?page=${page + 1}`}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Next
+                  </Link>
+                )}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

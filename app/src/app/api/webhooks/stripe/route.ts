@@ -27,6 +27,28 @@ export async function POST(request: NextRequest) {
 
   const supabase = getServiceClient()
 
+  // Idempotency: skip if we've already processed this event
+  const { data: existing } = await supabase
+    .from('sync_log')
+    .select('id')
+    .eq('platform', 'stripe')
+    .eq('sync_type', event.id)
+    .maybeSingle()
+
+  if (existing) {
+    return NextResponse.json({ received: true, duplicate: true })
+  }
+
+  // Log this event as processed
+  await supabase.from('sync_log').insert({
+    user_id: '00000000-0000-0000-0000-000000000000', // system-level event
+    platform: 'stripe',
+    sync_type: event.id,
+    status: 'completed',
+    records_synced: 1,
+    metadata: { event_type: event.type },
+  })
+
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object

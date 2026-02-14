@@ -3,9 +3,12 @@ Sync Queue Processor - picks queued jobs and dispatches them.
 Called by Modal scheduler every 1 minute.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from supabase import Client
 import rate_limiter
+
+log = logging.getLogger(__name__)
 
 
 def _cleanup_stale_jobs(db: Client, stale_minutes: int = 15) -> None:
@@ -56,7 +59,12 @@ def process_next_batch(db: Client, batch_size: int = 10):
 
         # Check rate limit budget
         if not rate_limiter.can_make_request(user_id, platform):
-            # Re-queue with delay
+            remaining = rate_limiter.get_remaining_budget(user_id, platform)
+            global_info = rate_limiter.get_global_usage(platform)
+            log.warning(
+                "Rate limit hit: user=%s platform=%s remaining=%d global_used=%d/%d — re-queuing job %s in 5m",
+                user_id, platform, remaining, global_info["used"], global_info["budget"], job["id"],
+            )
             _requeue_job(db, job["id"], minutes=5)
             continue
 

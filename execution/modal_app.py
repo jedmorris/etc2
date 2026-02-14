@@ -8,6 +8,7 @@ import importlib
 import modal
 import os
 from datetime import datetime, timedelta, timezone
+from log_config import setup_logging
 
 app = modal.App("etC2")
 
@@ -39,6 +40,7 @@ secrets = modal.Secret.from_name("etC2-secrets")
 )
 def process_sync_queue():
     """Pick up queued sync jobs and process them."""
+    setup_logging()
     from supabase_client import get_client
     from sync_queue import process_next_batch
 
@@ -60,6 +62,7 @@ def process_sync_queue():
 )
 def nightly_batch():
     """Run all nightly compute jobs sequentially, staggered per user."""
+    setup_logging()
     from supabase_client import get_client
     import time
 
@@ -119,6 +122,7 @@ def nightly_batch():
 )
 def weekly_rfm():
     """Compute RFM segments for all users, weekly."""
+    setup_logging()
     from supabase_client import get_client
     import time
 
@@ -176,6 +180,7 @@ def compute_rfm_for_user(user_id: str):
 @app.function(image=image, secrets=[secrets], timeout=300)
 def run_sync_job(job_id: str, user_id: str, job_type: str):
     """Run a single sync job."""
+    setup_logging()
     from supabase_client import get_client
 
     db = get_client()
@@ -364,6 +369,7 @@ def beehiiv_subscriber_webhook(request: dict):
 )
 def retry_newsletter_forwards():
     """Retry failed/pending Substack subscriber forwards."""
+    setup_logging()
     from newsletter_sync import retry_pending_subscribers
     result = retry_pending_subscribers()
     print(f"Newsletter retry: {result}")

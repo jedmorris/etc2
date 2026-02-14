@@ -28,6 +28,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard"
 import { RevenueChart } from "@/components/dashboard/RevenueChart"
 import { PlatformBadge } from "@/components/layout/PlatformBadge"
 import type { Platform } from "@/lib/utils/constants"
+import { RealtimeRefresh } from "@/components/dashboard/RealtimeRefresh"
 
 function statusColor(status: string) {
   switch (status) {
@@ -148,6 +149,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <RealtimeRefresh userId={user.id} />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
@@ -235,6 +237,7 @@ export default async function DashboardPage() {
               <CardDescription>Your latest orders across all platforms</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -280,6 +283,7 @@ export default async function DashboardPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </>

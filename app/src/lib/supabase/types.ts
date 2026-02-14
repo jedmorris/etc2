@@ -66,6 +66,8 @@ export interface Database {
           sync_cursor: Json
           error_message: string | null
           connected_at: string
+          created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -312,19 +314,24 @@ export interface Database {
           first_name: string | null
           last_name: string | null
           full_name: string | null
+          phone: string | null
           etsy_customer_id: string | null
           shopify_customer_id: string | null
           printify_customer_id: string | null
           city: string | null
           state: string | null
           country: string | null
+          zip: string | null
           order_count: number
           total_spent_cents: number
+          average_order_cents: number
+          first_order_at: string | null
           last_order_at: string | null
           rfm_recency: number | null
           rfm_frequency: number | null
           rfm_monetary: number | null
           rfm_segment: string | null
+          tags: string[] | null
           created_at: string
           updated_at: string
         }
@@ -335,19 +342,24 @@ export interface Database {
           first_name?: string | null
           last_name?: string | null
           full_name?: string | null
+          phone?: string | null
           etsy_customer_id?: string | null
           shopify_customer_id?: string | null
           printify_customer_id?: string | null
           city?: string | null
           state?: string | null
           country?: string | null
+          zip?: string | null
           order_count?: number
           total_spent_cents?: number
+          average_order_cents?: number
+          first_order_at?: string | null
           last_order_at?: string | null
           rfm_recency?: number | null
           rfm_frequency?: number | null
           rfm_monetary?: number | null
           rfm_segment?: string | null
+          tags?: string[] | null
         }
         Update: {
           id?: string
@@ -356,19 +368,24 @@ export interface Database {
           first_name?: string | null
           last_name?: string | null
           full_name?: string | null
+          phone?: string | null
           etsy_customer_id?: string | null
           shopify_customer_id?: string | null
           printify_customer_id?: string | null
           city?: string | null
           state?: string | null
           country?: string | null
+          zip?: string | null
           order_count?: number
           total_spent_cents?: number
+          average_order_cents?: number
+          first_order_at?: string | null
           last_order_at?: string | null
           rfm_recency?: number | null
           rfm_frequency?: number | null
           rfm_monetary?: number | null
           rfm_segment?: string | null
+          tags?: string[] | null
         }
         Relationships: []
       }
@@ -380,7 +397,9 @@ export interface Database {
           score: number
           sales_velocity: number
           margin_pct: number
+          consistency_score: number | null
           pipeline_stage: string
+          notes: string | null
           created_at: string
           updated_at: string
         }
@@ -391,7 +410,9 @@ export interface Database {
           score?: number
           sales_velocity?: number
           margin_pct?: number
+          consistency_score?: number | null
           pipeline_stage?: string
+          notes?: string | null
         }
         Update: {
           id?: string
@@ -400,7 +421,9 @@ export interface Database {
           score?: number
           sales_velocity?: number
           margin_pct?: number
+          consistency_score?: number | null
           pipeline_stage?: string
+          notes?: string | null
         }
         Relationships: []
       }
@@ -451,33 +474,39 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          job_id: string | null
           platform: string
           sync_type: string
           status: string
           records_synced: number
           error_message: string | null
+          metadata: Json
           started_at: string
           completed_at: string | null
         }
         Insert: {
           id?: string
           user_id: string
+          job_id?: string | null
           platform: string
           sync_type: string
           status?: string
           records_synced?: number
           error_message?: string | null
+          metadata?: Json
           started_at?: string
           completed_at?: string | null
         }
         Update: {
           id?: string
           user_id?: string
+          job_id?: string | null
           platform?: string
           sync_type?: string
           status?: string
           records_synced?: number
           error_message?: string | null
+          metadata?: Json
           started_at?: string
           completed_at?: string | null
         }

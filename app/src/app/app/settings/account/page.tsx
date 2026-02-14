@@ -114,6 +114,26 @@ export default function AccountSettingsPage() {
 
     try {
       const supabase = createClient();
+
+      // Verify current password by attempting to sign in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        setPasswordMessage("Error: Could not verify current user.");
+        setPasswordSaving(false);
+        return;
+      }
+
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+
+      if (verifyError) {
+        setPasswordMessage("Error: Current password is incorrect.");
+        setPasswordSaving(false);
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -142,15 +162,21 @@ export default function AccountSettingsPage() {
 
     setDeleting(true);
     try {
-      // TODO: Call server-side API to delete account and all data
-      // This requires a server action or API route with service role key
-      // await fetch('/api/account/delete', { method: 'DELETE' })
+      const res = await fetch("/api/account/delete", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to delete account");
+      }
 
       const supabase = createClient();
       await supabase.auth.signOut();
       router.push("/");
-    } catch {
+    } catch (err) {
+      setMessage(
+        `Error: ${err instanceof Error ? err.message : "Failed to delete account"}`
+      );
       setDeleting(false);
+      setConfirmDelete(false);
     }
   }
 

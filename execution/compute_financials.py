@@ -10,8 +10,8 @@ from supabase_client import get_client
 log = logging.getLogger(__name__)
 
 
-def run(user_id: str) -> int:
-    """Compute financials for user. Returns number of days processed."""
+def run(user_id: str) -> dict:
+    """Compute financials for user. Returns result dict with days_processed and errors."""
     db = get_client()
 
     # Use UTC date to ensure consistency across timezones
@@ -19,6 +19,7 @@ def run(user_id: str) -> int:
     start_date = end_date - timedelta(days=7)
 
     days_processed = 0
+    errors: list[str] = []
 
     for day_offset in range((end_date - start_date).days + 1):
         current_date = start_date + timedelta(days=day_offset)
@@ -39,7 +40,9 @@ def run(user_id: str) -> int:
                     .execute()
                 )
             except Exception as e:
-                log.error("Failed to fetch orders user=%s platform=%s date=%s: %s", user_id, platform, date_str, e)
+                msg = f"Failed to fetch orders platform={platform} date={date_str}: {e}"
+                log.error("user=%s %s", user_id, msg)
+                errors.append(msg)
                 continue
 
             rows = orders.data or []
@@ -82,15 +85,20 @@ def run(user_id: str) -> int:
                     "profit_cents": profit,
                 }, on_conflict="user_id,date,platform").execute()
             except Exception as e:
-                log.error("Failed to upsert daily_financials user=%s date=%s platform=%s: %s",
-                          user_id, date_str, platform, e)
+                msg = f"Failed to upsert daily_financials date={date_str} platform={platform}: {e}"
+                log.error("user=%s %s", user_id, msg)
+                errors.append(msg)
 
         days_processed += 1
 
     # Roll up into monthly_pnl
     _compute_monthly_pnl(db, user_id, start_date, end_date)
 
-    return days_processed
+    result = {"days_processed": days_processed, "errors": errors, "status": "complete"}
+    if errors:
+        result["status"] = "partial"
+        log.warning("user=%s financials computed with %d errors", user_id, len(errors))
+    return result
 
 
 def _compute_monthly_pnl(db, user_id: str, start_date, end_date):

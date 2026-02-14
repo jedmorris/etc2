@@ -28,10 +28,12 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   draft: "bg-yellow-500 text-white hover:bg-yellow-500/90",
 };
 
+const PAGE_SIZE = 50;
+
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -40,7 +42,20 @@ export default async function ProductsPage({
 
   if (!user) redirect("/login");
 
-  const { q, status } = await searchParams;
+  const { q, status, page: pageParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  // Count query
+  let countQuery = supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (q) countQuery = countQuery.ilike("title", `%${q}%`);
+  if (status && status !== "all") countQuery = countQuery.eq("status", status);
+  const { count: totalCount } = await countQuery;
+  const total = totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Build query
   let query = supabase
@@ -48,7 +63,7 @@ export default async function ProductsPage({
     .select("*")
     .eq("user_id", user.id)
     .order("total_sales", { ascending: false })
-    .limit(50);
+    .range(offset, offset + PAGE_SIZE - 1);
 
   if (q) {
     query = query.ilike("title", `%${q}%`);
@@ -66,6 +81,15 @@ export default async function ProductsPage({
 
   const productList = products ?? [];
 
+  function pageUrl(p: number) {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (status) sp.set("status", status);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return `/app/products${qs ? `?${qs}` : ""}`;
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -81,13 +105,14 @@ export default async function ProductsPage({
             <div>
               <CardTitle>Product Catalog</CardTitle>
               <CardDescription>
-                {productList.length} product{productList.length !== 1 ? "s" : ""}
+                {total} product{total !== 1 ? "s" : ""}
               </CardDescription>
             </div>
             <ProductFilters currentQuery={q} currentStatus={status} />
           </div>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -182,6 +207,34 @@ export default async function ProductsPage({
               )}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t pt-4 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+              </p>
+              <div className="flex gap-2">
+                {page > 1 && (
+                  <Link
+                    href={pageUrl(page - 1)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Previous
+                  </Link>
+                )}
+                {page < totalPages && (
+                  <Link
+                    href={pageUrl(page + 1)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
+                  >
+                    Next
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -211,6 +211,7 @@ CREATE INDEX idx_orders_ordered_at ON orders(user_id, ordered_at DESC);
 CREATE INDEX idx_orders_platform ON orders(user_id, platform);
 CREATE INDEX idx_orders_status ON orders(user_id, status);
 CREATE INDEX idx_orders_customer ON orders(user_id, customer_id);
+CREATE INDEX idx_orders_updated_at ON orders(user_id, updated_at DESC);
 
 -- ============================================
 -- ORDER LINE ITEMS
@@ -353,6 +354,7 @@ ALTER TABLE daily_financials ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own financials" ON daily_financials FOR ALL USING (auth.uid() = user_id);
 
 CREATE INDEX idx_daily_financials_user_date ON daily_financials(user_id, date DESC);
+CREATE INDEX idx_daily_financials_user_platform_date ON daily_financials(user_id, platform, date DESC);
 
 -- ============================================
 -- MONTHLY P&L
@@ -422,6 +424,7 @@ ALTER TABLE sync_jobs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users see own sync jobs" ON sync_jobs FOR ALL USING (auth.uid() = user_id);
 
 CREATE INDEX idx_sync_jobs_queue ON sync_jobs(status, scheduled_at, priority DESC) WHERE status = 'queued';
+CREATE INDEX idx_sync_jobs_running ON sync_jobs(status, started_at) WHERE status = 'running';
 CREATE INDEX idx_sync_jobs_user ON sync_jobs(user_id, created_at DESC);
 
 -- ============================================

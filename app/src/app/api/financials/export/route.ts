@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     .from("profiles")
     .select("plan")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
 
@@ -35,8 +35,11 @@ export async function GET(request: NextRequest) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const from = searchParams.get("from") ?? thirtyDaysAgo.toISOString().split("T")[0];
-  const to = searchParams.get("to") ?? now.toISOString().split("T")[0];
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  const from = fromParam && dateRegex.test(fromParam) ? fromParam : thirtyDaysAgo.toISOString().split("T")[0];
+  const to = toParam && dateRegex.test(toParam) ? toParam : now.toISOString().split("T")[0];
 
   // Query daily_financials for the date range
   const { data: rows, error } = await supabase
@@ -51,6 +54,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { error: "Failed to fetch financial data" },
       { status: 500 },
+    );
+  }
+
+  if (!rows || rows.length === 0) {
+    return NextResponse.json(
+      { error: "No financial data found for the selected date range" },
+      { status: 404 },
     );
   }
 
