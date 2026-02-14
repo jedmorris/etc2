@@ -16,6 +16,7 @@ import {
   Users,
   TrendingUp,
   Truck,
+  Mail,
   Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -48,9 +49,11 @@ const PAGE_TITLES: Record<string, string> = {
   "/app/customers": "Customers",
   "/app/bestsellers": "Bestsellers",
   "/app/fulfillment": "Fulfillment",
+  "/app/newsletter": "Newsletter",
   "/app/settings": "Settings",
   "/app/settings/billing": "Billing",
   "/app/settings/account": "Account",
+  "/app/settings/sync-history": "Sync History",
 }
 
 const MOBILE_NAV = [
@@ -61,6 +64,7 @@ const MOBILE_NAV = [
   { label: "Customers", href: "/app/customers", icon: Users },
   { label: "Bestsellers", href: "/app/bestsellers", icon: TrendingUp },
   { label: "Fulfillment", href: "/app/fulfillment", icon: Truck },
+  { label: "Newsletter", href: "/app/newsletter", icon: Mail },
   { label: "Settings", href: "/app/settings", icon: Settings },
 ]
 

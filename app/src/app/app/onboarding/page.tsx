@@ -96,7 +96,7 @@ export default function OnboardingPage() {
         .from("profiles")
         .select("onboarding_step, onboarding_completed, plan")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
 
       if (profile?.onboarding_completed) {
         router.push("/app")
