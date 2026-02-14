@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Lock, Users } from "lucide-react";
+import { Download, Lock, Users } from "lucide-react";
 import {
   formatCents,
   formatNumber,
@@ -161,9 +161,17 @@ export default async function CustomersPage({
             Customer insights with RFM segmentation.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="size-4" />
-          {formatNumber(total)} total
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="size-4" />
+            {formatNumber(total)} total
+          </div>
+          <a href="/api/customers/export" download>
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 size-4" />
+              Export CSV
+            </Button>
+          </a>
         </div>
       </div>
 

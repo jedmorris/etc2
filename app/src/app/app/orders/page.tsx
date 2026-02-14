@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Download } from "lucide-react"
 import { formatCents, formatDate } from "@/lib/utils/format"
 import { PlatformBadge } from "@/components/layout/PlatformBadge"
 import type { Platform } from "@/lib/utils/constants"
@@ -91,12 +93,18 @@ const statusFilters = [
   { label: "Cancelled", value: "cancelled" },
 ] as const
 
+const DATE_PRESETS = [
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+] as const
+
 const PAGE_SIZE = 50
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ platform?: string; status?: string; q?: string; page?: string }>
+  searchParams: Promise<{ platform?: string; status?: string; q?: string; page?: string; from?: string; to?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -109,6 +117,11 @@ export default async function OrdersPage({
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
   const offset = (page - 1) * PAGE_SIZE
 
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+  const fromFilter = params.from && dateRegex.test(params.from) ? params.from : ""
+  const toFilter = params.to && dateRegex.test(params.to) ? params.to : ""
+  const todayStr = new Date().toISOString().split("T")[0]
+
   // Build count query for total
   let countQuery = supabase
     .from("orders")
@@ -118,6 +131,8 @@ export default async function OrdersPage({
   if (platformFilter) countQuery = countQuery.eq("platform", platformFilter)
   if (statusFilter) countQuery = countQuery.eq("status", statusFilter)
   if (searchQuery) countQuery = countQuery.ilike("platform_order_number", `%${searchQuery}%`)
+  if (fromFilter) countQuery = countQuery.gte("ordered_at", fromFilter)
+  if (toFilter) countQuery = countQuery.lte("ordered_at", toFilter + "T23:59:59.999Z")
 
   const { count: totalCount } = await countQuery
   const total = totalCount ?? 0
@@ -140,13 +155,19 @@ export default async function OrdersPage({
   if (searchQuery) {
     query = query.ilike("platform_order_number", `%${searchQuery}%`)
   }
+  if (fromFilter) {
+    query = query.gte("ordered_at", fromFilter)
+  }
+  if (toFilter) {
+    query = query.lte("ordered_at", toFilter + "T23:59:59.999Z")
+  }
 
   const { data: orders } = await query
   const orderList = orders ?? []
 
   // Build filter URL helper
   function filterUrl(overrides: Record<string, string>) {
-    const merged: Record<string, string> = { platform: platformFilter, status: statusFilter, q: searchQuery, ...overrides }
+    const merged: Record<string, string> = { platform: platformFilter, status: statusFilter, q: searchQuery, from: fromFilter, to: toFilter, ...overrides }
     // Reset to page 1 when filters change (unless page is explicitly set)
     if (!overrides.page) delete merged.page
     const sp = new URLSearchParams()
@@ -157,17 +178,64 @@ export default async function OrdersPage({
     return `/app/orders${qs ? `?${qs}` : ""}`
   }
 
+  // Build export URL with current filters
+  const exportParams = new URLSearchParams()
+  if (fromFilter) exportParams.set("from", fromFilter)
+  if (toFilter) exportParams.set("to", toFilter)
+  const exportQs = exportParams.toString()
+  const exportUrl = `/api/orders/export${exportQs ? `?${exportQs}` : ""}`
+
   function pageUrl(p: number) {
     return filterUrl({ page: String(p) })
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
-        <p className="text-muted-foreground">
-          All orders across your connected stores.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Orders</h1>
+          <p className="text-muted-foreground">
+            All orders across your connected stores.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {DATE_PRESETS.map((preset) => {
+            const presetFrom = new Date()
+            presetFrom.setDate(presetFrom.getDate() - preset.days)
+            const pFrom = presetFrom.toISOString().split("T")[0]
+            const isActive = fromFilter === pFrom && toFilter === todayStr
+            return (
+              <Link
+                key={preset.days}
+                href={filterUrl({ from: pFrom, to: todayStr })}
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border hover:bg-accent hover:text-accent-foreground"
+                }`}
+              >
+                {preset.label}
+              </Link>
+            )
+          })}
+          <Link
+            href={filterUrl({ from: "", to: "" })}
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              !fromFilter && !toFilter
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border hover:bg-accent hover:text-accent-foreground"
+            }`}
+          >
+            All
+          </Link>
+
+          <a href={exportUrl} download>
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 size-4" />
+              Export CSV
+            </Button>
+          </a>
+        </div>
       </div>
 
       <Card>

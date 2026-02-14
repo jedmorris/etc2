@@ -38,7 +38,7 @@ export default function SignupPage() {
         password,
         options: {
           data: {
-            display_name: name,
+            full_name: name,
           },
         },
       });

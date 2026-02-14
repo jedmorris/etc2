@@ -17,7 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ImageIcon, Package } from "lucide-react";
+import { Download, ImageIcon, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { formatCents, formatNumber } from "@/lib/utils/format";
 import { PlatformBadge } from "@/components/layout/PlatformBadge";
 import { ProductFilters } from "./product-filters";
@@ -92,11 +93,19 @@ export default async function ProductsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Products</h1>
-        <p className="text-muted-foreground">
-          All products across your connected stores.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Products</h1>
+          <p className="text-muted-foreground">
+            All products across your connected stores.
+          </p>
+        </div>
+        <a href="/api/products/export" download>
+          <Button variant="outline" size="sm">
+            <Download className="mr-2 size-4" />
+            Export CSV
+          </Button>
+        </a>
       </div>
 
       <Card>
