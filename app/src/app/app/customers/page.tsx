@@ -25,6 +25,7 @@ import {
   formatRelativeTime,
 } from "@/lib/utils/format";
 import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { RfmSegmentChart } from "@/components/dashboard/RfmSegmentChart";
 
 const RFM_COLORS: Record<string, string> = {
   champion:
@@ -134,6 +135,23 @@ export default async function CustomersPage({
 
   const customerList = customers ?? [];
 
+  // Aggregate RFM segments for chart
+  const { data: allCustomerSegments } = await supabase
+    .from("customers")
+    .select("rfm_segment")
+    .eq("user_id", user.id)
+    .not("rfm_segment", "is", null)
+
+  const segmentCounts = new Map<string, number>()
+  for (const c of allCustomerSegments ?? []) {
+    if (c.rfm_segment) {
+      segmentCounts.set(c.rfm_segment, (segmentCounts.get(c.rfm_segment) ?? 0) + 1)
+    }
+  }
+  const rfmChartData = Array.from(segmentCounts.entries())
+    .map(([segment, count]) => ({ segment, count }))
+    .sort((a, b) => b.count - a.count)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -148,6 +166,10 @@ export default async function CustomersPage({
           {formatNumber(total)} total
         </div>
       </div>
+
+      {rfmChartData.length > 0 && (
+        <RfmSegmentChart data={rfmChartData} />
+      )}
 
       <Card>
         <CardHeader>

@@ -622,6 +622,101 @@ export interface Database {
         }
         Relationships: []
       }
+      newsletter_subscribers: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          beehiiv_subscriber_id: string | null
+          beehiiv_status: string
+          substack_status: string
+          tags: Json
+          segments: Json
+          utm_source: string | null
+          utm_medium: string | null
+          utm_campaign: string | null
+          beehiiv_created_at: string | null
+          synced_to_substack_at: string | null
+          last_webhook_at: string | null
+          error_message: string | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          beehiiv_subscriber_id?: string | null
+          beehiiv_status?: string
+          substack_status?: string
+          tags?: Json
+          segments?: Json
+          utm_source?: string | null
+          utm_medium?: string | null
+          utm_campaign?: string | null
+          beehiiv_created_at?: string | null
+          synced_to_substack_at?: string | null
+          last_webhook_at?: string | null
+          error_message?: string | null
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          beehiiv_subscriber_id?: string | null
+          beehiiv_status?: string
+          substack_status?: string
+          tags?: Json
+          segments?: Json
+          utm_source?: string | null
+          utm_medium?: string | null
+          utm_campaign?: string | null
+          beehiiv_created_at?: string | null
+          synced_to_substack_at?: string | null
+          last_webhook_at?: string | null
+          error_message?: string | null
+          metadata?: Json
+        }
+        Relationships: []
+      }
+      newsletter_sync_log: {
+        Row: {
+          id: string
+          user_id: string
+          subscriber_id: string | null
+          action: string
+          source: string
+          status: string
+          error_message: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscriber_id?: string | null
+          action: string
+          source: string
+          status?: string
+          error_message?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscriber_id?: string | null
+          action?: string
+          source?: string
+          status?: string
+          error_message?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

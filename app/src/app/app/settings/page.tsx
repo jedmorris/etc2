@@ -19,7 +19,9 @@ import {
   XCircle,
   AlertTriangle,
   Loader2,
+  History,
 } from "lucide-react";
+import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { PLATFORMS } from "@/lib/utils/constants";
 
@@ -130,6 +132,15 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">
           Manage your connected store and fulfillment accounts.
         </p>
+      </div>
+
+      <div className="flex justify-end">
+        <Link href="/app/settings/sync-history">
+          <Button variant="outline" className="gap-2">
+            <History className="size-4" />
+            View Sync History
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

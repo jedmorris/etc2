@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Truck,
   Settings,
+  Mail,
   Lock,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Customers", href: "/app/customers", icon: Users, requiredPlan: "growth" },
   { label: "Bestsellers", href: "/app/bestsellers", icon: TrendingUp, requiredPlan: "growth" },
   { label: "Fulfillment", href: "/app/fulfillment", icon: Truck, requiredPlan: "growth" },
+  { label: "Newsletter", href: "/app/newsletter", icon: Mail, requiredPlan: "growth" },
 ]
 
 const BOTTOM_ITEMS: NavItem[] = [

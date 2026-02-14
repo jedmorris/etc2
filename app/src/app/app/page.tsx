@@ -29,6 +29,7 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart"
 import { PlatformBadge } from "@/components/layout/PlatformBadge"
 import type { Platform } from "@/lib/utils/constants"
 import { RealtimeRefresh } from "@/components/dashboard/RealtimeRefresh"
+import { PlatformRevenueChart } from "@/components/dashboard/PlatformRevenueChart"
 
 function statusColor(status: string) {
   switch (status) {
@@ -96,7 +97,7 @@ export default async function DashboardPage() {
   // Fetch daily_financials for revenue chart (last 30 days)
   const { data: dailyFinancials } = await supabase
     .from("daily_financials")
-    .select("date, gross_revenue_cents, order_count")
+    .select("date, platform, gross_revenue_cents, order_count")
     .eq("user_id", user.id)
     .gte("date", thirtyDaysAgo.slice(0, 10))
     .order("date", { ascending: true })
@@ -122,6 +123,18 @@ export default async function DashboardPage() {
       revenue: vals.revenue,
       orders: vals.orders,
     }))
+
+  // Aggregate revenue by platform (last 30 days)
+  const platformMap = new Map<string, number>()
+  for (const row of dailyFinancials ?? []) {
+    platformMap.set(
+      row.platform,
+      (platformMap.get(row.platform) ?? 0) + row.gross_revenue_cents
+    )
+  }
+  const platformRevenueData = Array.from(platformMap.entries())
+    .map(([platform, revenue]) => ({ platform, revenue }))
+    .sort((a, b) => b.revenue - a.revenue)
 
   // Fetch recent orders
   const { data: recentOrders } = await supabase
@@ -228,6 +241,11 @@ export default async function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Platform Revenue */}
+          {platformRevenueData.length > 1 && (
+            <PlatformRevenueChart data={platformRevenueData} />
           )}
 
           {/* Recent Orders */}
