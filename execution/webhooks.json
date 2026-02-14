@@ -17,5 +17,31 @@
       "directive": "newsletter_subscriber_sync",
       "events": ["subscriber.created", "subscriber.unsubscribed"]
     }
+  ],
+  "nextjs_webhooks": [
+    {
+      "path": "/api/webhooks/stripe",
+      "description": "Stripe billing events → profile updates",
+      "method": "POST",
+      "events": ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "invoice.paid", "invoice.payment_failed"]
+    },
+    {
+      "path": "/api/webhooks/shopify",
+      "description": "Shopify shop events → sync_jobs queue",
+      "method": "POST",
+      "events": ["orders/*", "products/*", "customers/*", "app/uninstalled"]
+    },
+    {
+      "path": "/api/webhooks/printify",
+      "description": "Printify fulfillment events → sync_jobs queue",
+      "method": "POST",
+      "events": ["order:*", "product:*"]
+    },
+    {
+      "path": "/api/webhooks/etsy",
+      "description": "Etsy order events → sync_jobs queue",
+      "method": "POST",
+      "events": ["order.paid"]
+    }
   ]
 }

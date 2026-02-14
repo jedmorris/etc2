@@ -19,6 +19,7 @@ image = modal.Image.debian_slim(python_version="3.12").pip_install(
     "python-dotenv>=1.0.0",
     "stripe>=8.0.0",
     "resend>=2.0.0",
+    "fastapi[standard]",
 )
 
 # Secrets from Modal dashboard
@@ -46,7 +47,8 @@ def process_sync_queue():
 
 
 # ============================================
-# NIGHTLY COMPUTE JOBS (staggered)
+# NIGHTLY BATCH (consolidated to stay within cron limit)
+# Runs: financials → customer merge → bestsellers → newsletter reconcile
 # ============================================
 
 
@@ -54,10 +56,10 @@ def process_sync_queue():
     image=image,
     secrets=[secrets],
     schedule=modal.Cron("0 2 * * *"),  # 2 AM daily
-    timeout=1800,
+    timeout=7200,
 )
-def nightly_financials():
-    """Compute daily financials for all users, staggered."""
+def nightly_batch():
+    """Run all nightly compute jobs sequentially, staggered per user."""
     from supabase_client import get_client
     import time
 
@@ -65,30 +67,20 @@ def nightly_financials():
     result = db.table("profiles").select("user_id").execute()
     users = result.data or []
 
+    # Phase 1: Financials
+    print(f"[nightly] Starting financials for {len(users)} users")
     for i, user in enumerate(users):
         if i > 0 and i % 5 == 0:
-            time.sleep(60)  # Stagger: 5 users per minute
+            time.sleep(60)
         try:
             compute_financials_for_user.spawn(user["user_id"])
         except Exception as e:
             print(f"Failed to spawn financials for {user['user_id']}: {e}")
 
+    time.sleep(120)  # 2 min buffer between phases
 
-@app.function(
-    image=image,
-    secrets=[secrets],
-    schedule=modal.Cron("0 4 * * *"),  # 4 AM daily
-    timeout=1800,
-)
-def nightly_customer_merge():
-    """Compute customer merge for all users, staggered."""
-    from supabase_client import get_client
-    import time
-
-    db = get_client()
-    result = db.table("profiles").select("user_id").execute()
-    users = result.data or []
-
+    # Phase 2: Customer merge
+    print(f"[nightly] Starting customer merge for {len(users)} users")
     for i, user in enumerate(users):
         if i > 0 and i % 5 == 0:
             time.sleep(60)
@@ -97,22 +89,10 @@ def nightly_customer_merge():
         except Exception as e:
             print(f"Failed to spawn customer merge for {user['user_id']}: {e}")
 
+    time.sleep(120)
 
-@app.function(
-    image=image,
-    secrets=[secrets],
-    schedule=modal.Cron("0 6 * * *"),  # 6 AM daily
-    timeout=1800,
-)
-def nightly_bestsellers():
-    """Compute bestseller candidates for all users, staggered."""
-    from supabase_client import get_client
-    import time
-
-    db = get_client()
-    result = db.table("profiles").select("user_id").execute()
-    users = result.data or []
-
+    # Phase 3: Bestsellers
+    print(f"[nightly] Starting bestsellers for {len(users)} users")
     for i, user in enumerate(users):
         if i > 0 and i % 5 == 0:
             time.sleep(60)
@@ -120,6 +100,15 @@ def nightly_bestsellers():
             compute_bestsellers_for_user.spawn(user["user_id"])
         except Exception as e:
             print(f"Failed to spawn bestsellers for {user['user_id']}: {e}")
+
+    # Phase 4: Newsletter reconciliation
+    print("[nightly] Starting newsletter reconciliation")
+    try:
+        from newsletter_sync import reconcile_subscribers
+        r = reconcile_subscribers()
+        print(f"Newsletter reconciliation: {r}")
+    except Exception as e:
+        print(f"Newsletter reconciliation failed: {e}")
 
 
 @app.function(
@@ -308,7 +297,7 @@ def _schedule_next(db, user_id: str, job_type: str):
 
 
 @app.function(image=image, secrets=[secrets])
-@modal.web_endpoint(method="GET")
+@modal.fastapi_endpoint(method="GET")
 def list_webhooks():
     """List all registered webhook endpoints."""
     import json
@@ -320,7 +309,7 @@ def list_webhooks():
 
 
 @app.function(image=image, secrets=[secrets])
-@modal.web_endpoint(method="GET")
+@modal.fastapi_endpoint(method="GET")
 def health():
     """Health check endpoint."""
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -333,7 +322,7 @@ def health():
 
 
 @app.function(image=image, secrets=[secrets])
-@modal.web_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST")
 def beehiiv_subscriber_webhook(request: dict):
     """Handle Beehiiv subscriber webhook events.
 
@@ -380,14 +369,4 @@ def retry_newsletter_forwards():
     print(f"Newsletter retry: {result}")
 
 
-@app.function(
-    image=image,
-    secrets=[secrets],
-    schedule=modal.Cron("0 5 * * *"),  # Daily at 5 AM
-    timeout=1800,
-)
-def reconcile_newsletter_subscribers():
-    """Daily reconciliation: compare Beehiiv list against our DB."""
-    from newsletter_sync import reconcile_subscribers
-    result = reconcile_subscribers()
-    print(f"Newsletter reconciliation: {result}")
+# reconcile_newsletter_subscribers is now part of nightly_batch()

@@ -19,6 +19,24 @@ Everything you need to go from zero to running. Follow these steps in order.
 
 ## Step 2: Stripe (Test Mode)
 
+### Option A: Automated (Recommended)
+
+1. Install and authenticate the Stripe CLI:
+   ```bash
+   stripe login
+   ```
+2. Run the setup script to create products, prices, and get env vars:
+   ```bash
+   bash scripts/setup-stripe-test.sh
+   ```
+3. Start webhook forwarding (keep this terminal open during dev):
+   ```bash
+   stripe listen --forward-to localhost:3000/api/webhooks/stripe
+   ```
+4. Copy the webhook signing secret (`whsec_...`) from the output
+
+### Option B: Manual (Dashboard)
+
 1. Create an account at [stripe.com](https://stripe.com)
 2. In **Test Mode**, create 3 products with monthly prices:
    - Starter — $19/mo
@@ -43,6 +61,10 @@ Everything you need to go from zero to running. Follow these steps in order.
 3. Set the callback URL: `http://localhost:3000/callback/etsy`
 4. Note the **Keystring** — this is your `ETSY_API_KEY`
 5. No client secret needed (Etsy uses PKCE flow)
+6. **Webhooks**: In the Etsy developer portal, go to **Webhooks** and add an endpoint:
+   - URL: `<your-url>/api/webhooks/etsy`
+   - Events: `order.paid`
+7. Copy the **signing secret** (`whsec_...`) — this is your `ETSY_WEBHOOK_SECRET`
 
 ## Step 4: Shopify Partner App
 
@@ -102,6 +124,7 @@ STRIPE_METERED_PRICE_ID=price_...
 
 # Etsy (PKCE — no secret needed)
 ETSY_API_KEY=your-etsy-keystring
+ETSY_WEBHOOK_SECRET=whsec_...
 
 # Shopify
 SHOPIFY_API_KEY=your-shopify-api-key
@@ -130,6 +153,7 @@ modal secret create etC2-secrets \
   SUPABASE_SERVICE_ROLE_KEY=<val> \
   TOKEN_ENCRYPTION_KEY=<val> \
   ETSY_API_KEY=<val> \
+  ETSY_WEBHOOK_SECRET=<val> \
   SHOPIFY_API_KEY=<val> \
   SHOPIFY_API_SECRET=<val> \
   RESEND_API_KEY=<val> \
@@ -159,7 +183,11 @@ modal deploy execution/modal_app.py
 3. Update OAuth callback URLs to your production domain:
    - Etsy: `https://yourdomain.com/callback/etsy`
    - Shopify: `https://yourdomain.com/callback/shopify`
-4. Update Stripe webhook URL: `https://yourdomain.com/api/webhooks/stripe`
+4. Update webhook URLs:
+   - Stripe: `https://yourdomain.com/api/webhooks/stripe`
+   - Etsy: `https://yourdomain.com/api/webhooks/etsy`
+   - Shopify: auto-registered during OAuth connect
+   - Printify: auto-registered during OAuth connect
 5. Update Supabase Site URL and redirect URLs to production domain
 6. Update Modal secrets with production values
 
