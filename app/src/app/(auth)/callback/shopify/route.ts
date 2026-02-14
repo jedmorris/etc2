@@ -170,6 +170,14 @@ export async function GET(request: NextRequest) {
       console.error("Webhook registration failed:", err)
     );
 
+    // Queue initial sync jobs for Shopify
+    const now = new Date().toISOString();
+    await supabase.from("sync_jobs").insert([
+      { user_id: user.id, job_type: "shopify_orders", status: "queued", scheduled_at: now },
+      { user_id: user.id, job_type: "shopify_products", status: "queued", scheduled_at: now },
+      { user_id: user.id, job_type: "shopify_customers", status: "queued", scheduled_at: now },
+    ]);
+
     // Build success redirect and clear OAuth cookies
     if (isOnboarding) {
       redirectUrl.searchParams.set("shopify_connected", "true");

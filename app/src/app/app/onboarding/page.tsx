@@ -305,21 +305,35 @@ export default function OnboardingPage() {
     >
       {/* Step 1: Connect Etsy */}
       {currentStep === 1 && (
-        <ConnectEtsy
-          status={connections.etsy.status}
-          shopName={connections.etsy.shopName}
-          onConnect={handleEtsyConnect}
-          errorMessage={connections.etsy.error}
-        />
+        <div className="space-y-3">
+          <ConnectEtsy
+            status={connections.etsy.status}
+            shopName={connections.etsy.shopName}
+            onConnect={handleEtsyConnect}
+            errorMessage={connections.etsy.error}
+          />
+          <div className="text-center">
+            <Button variant="ghost" size="sm" onClick={() => setCurrentStep(2)} className="text-muted-foreground">
+              Skip for now
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Step 2: Connect Printify */}
       {currentStep === 2 && (
-        <ConnectPrintify
-          status={connections.printify.status}
-          onConnect={handlePrintifyConnect}
-          errorMessage={connections.printify.error}
-        />
+        <div className="space-y-3">
+          <ConnectPrintify
+            status={connections.printify.status}
+            onConnect={handlePrintifyConnect}
+            errorMessage={connections.printify.error}
+          />
+          <div className="text-center">
+            <Button variant="ghost" size="sm" onClick={() => setCurrentStep(3)} className="text-muted-foreground">
+              Skip for now
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Step 3: Connect Shopify (optional) */}

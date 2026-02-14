@@ -130,6 +130,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
+    // Queue initial sync jobs for Etsy
+    const now = new Date().toISOString();
+    await supabase.from("sync_jobs").insert([
+      { user_id: user.id, job_type: "etsy_orders", status: "queued", scheduled_at: now },
+      { user_id: user.id, job_type: "etsy_listings", status: "queued", scheduled_at: now },
+      { user_id: user.id, job_type: "etsy_payments", status: "queued", scheduled_at: now },
+    ]);
+
     // Clear OAuth cookies
     const response = NextResponse.redirect(
       (() => {

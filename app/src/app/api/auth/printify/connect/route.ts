@@ -112,6 +112,13 @@ export async function POST(request: NextRequest) {
       console.error('Printify webhook registration failed:', err)
     )
 
+    // Queue initial sync jobs for Printify orders and products
+    const now = new Date().toISOString()
+    await supabase.from('sync_jobs').insert([
+      { user_id: user.id, job_type: 'printify_orders', status: 'queued', scheduled_at: now },
+      { user_id: user.id, job_type: 'printify_products', status: 'queued', scheduled_at: now },
+    ])
+
     return NextResponse.json({
       success: true,
       shop: { id: shop.id, name: shop.title },
