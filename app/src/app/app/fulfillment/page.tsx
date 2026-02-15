@@ -68,6 +68,7 @@ export default async function FulfillmentPage() {
     .limit(100);
 
   // Fetch recently delivered (last 7 days)
+  // eslint-disable-next-line react-hooks/purity -- Server Component, not re-rendered
   const sevenDaysAgo = new Date(
     Date.now() - 7 * 24 * 60 * 60 * 1000
   ).toISOString();

@@ -15,7 +15,7 @@ export function OfflineBanner() {
     }
 
     // Check initial state
-    if (!navigator.onLine) setOffline(true);
+    if (!navigator.onLine) handleOffline();
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);

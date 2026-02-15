@@ -48,5 +48,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r execution/requirements.txt
 
+      - name: Verify httpx
+        run: python3 -c "import httpx; print(f'httpx {httpx.__version__}'); print(httpx.Client)"
+
       - name: Run test harness
         run: cd execution && python3 test_harness.py

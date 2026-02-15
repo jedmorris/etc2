@@ -100,13 +100,15 @@ export default async function NewsletterPage() {
     dailyMap.set(date, (dailyMap.get(date) ?? 0) + 1)
   }
 
-  let cumulative = 0
-  const chartData = Array.from(dailyMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, count]) => {
-      cumulative += count
-      return { date, subscribers: cumulative }
-    })
+  const chartData = (() => {
+    let cumulative = 0
+    return Array.from(dailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => {
+        cumulative += count
+        return { date, subscribers: cumulative }
+      })
+  })()
 
   // Recent sync log (last 10)
   const { data: recentSyncLog } = await supabase
