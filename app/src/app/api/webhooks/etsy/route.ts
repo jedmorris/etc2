@@ -135,28 +135,40 @@ export async function POST(request: NextRequest) {
 
   const jobType = EVENT_MAP[eventType]
   if (jobType) {
-    // Avoid duplicate sync jobs for the same event by checking for recent webhook-triggered jobs
-    const { data: existing } = await supabase
-      .from('sync_jobs')
-      .select('id')
-      .eq('user_id', account.user_id)
-      .eq('job_type', jobType)
-      .eq('status', 'queued')
-      .limit(1)
+    // Idempotency: skip if we've already processed this event
+    if (payload.event_id) {
+      const { data: existing } = await supabase
+        .from('sync_log')
+        .select('id')
+        .eq('platform', 'etsy')
+        .eq('sync_type', payload.event_id)
+        .maybeSingle()
 
-    if (!existing?.length) {
-      await supabase.from('sync_jobs').insert({
+      if (existing) {
+        return NextResponse.json({ received: true, duplicate: true })
+      }
+
+      await supabase.from('sync_log').insert({
         user_id: account.user_id,
-        job_type: jobType,
-        priority: 10,
-        metadata: {
-          trigger: 'webhook',
-          event: eventType,
-          event_id: payload.event_id,
-          resource_url: payload.data?.resource_url,
-        },
+        platform: 'etsy',
+        sync_type: payload.event_id,
+        status: 'completed',
+        records_synced: 1,
+        metadata: { event_type: eventType },
       })
     }
+
+    await supabase.from('sync_jobs').insert({
+      user_id: account.user_id,
+      job_type: jobType,
+      priority: 10,
+      metadata: {
+        trigger: 'webhook',
+        event: eventType,
+        event_id: payload.event_id,
+        resource_url: payload.data?.resource_url,
+      },
+    })
   }
 
   return NextResponse.json({ received: true })

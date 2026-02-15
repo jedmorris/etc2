@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import crypto from 'crypto'
+import { rateLimit } from '@/lib/rate-limit'
 
 function getServiceClient() {
   return createServerClient(
@@ -39,10 +40,16 @@ const TOPIC_MAP: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  if (!rateLimit(ip, 100, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   const body = await request.text()
   const hmac = request.headers.get('x-shopify-hmac-sha256')
   const topic = request.headers.get('x-shopify-topic')
   const shopDomain = request.headers.get('x-shopify-shop-domain')
+  const webhookId = request.headers.get('x-shopify-webhook-id')
 
   if (!hmac || !verifyShopifyHmac(body, hmac)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
@@ -82,14 +89,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true })
   }
 
+  // Idempotency: skip if we've already processed this webhook event
+  if (webhookId) {
+    const { data: existing } = await supabase
+      .from('sync_log')
+      .select('id')
+      .eq('platform', 'shopify')
+      .eq('sync_type', webhookId)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+  }
+
   // Queue a sync job for recognized topics
   const jobType = TOPIC_MAP[topic]
   if (jobType) {
+    // Log this event as processed for deduplication
+    if (webhookId) {
+      await supabase.from('sync_log').insert({
+        user_id: account.user_id,
+        platform: 'shopify',
+        sync_type: webhookId,
+        status: 'completed',
+        records_synced: 1,
+        metadata: { event_type: topic },
+      })
+    }
+
     await supabase.from('sync_jobs').insert({
       user_id: account.user_id,
       job_type: jobType,
       priority: 10,
-      metadata: { trigger: 'webhook', topic },
+      metadata: { trigger: 'webhook', topic, webhook_id: webhookId },
     })
   }
 

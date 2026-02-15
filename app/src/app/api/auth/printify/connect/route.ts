@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { encryptToken, generateSecret } from '@/lib/utils/crypto'
+import { rateLimit } from '@/lib/rate-limit'
 
 const PRINTIFY_API = 'https://api.printify.com/v1'
 
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!rateLimit(user.id, 60, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
 
   const { token } = await request.json()

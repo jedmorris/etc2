@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
 import { stripe } from '@/lib/stripe/client'
-import { getPlanByPriceId } from '@/lib/stripe/plans'
+import { PLANS, type PlanId, getPlanByPriceId } from '@/lib/stripe/plans'
 import { createServerClient } from '@supabase/ssr'
+import { rateLimit } from '@/lib/rate-limit'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM_EMAIL = process.env.FROM_EMAIL ?? 'alerts@etc2.com'
@@ -18,6 +19,11 @@ function getServiceClient() {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  if (!rateLimit(ip, 100, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   const body = await request.text()
   const sig = request.headers.get('stripe-signature')!
 
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
         stripe_subscription_id: session.subscription as string,
         plan,
         plan_status: 'active',
-        monthly_order_limit: plan === 'starter' ? 300 : plan === 'growth' ? 1500 : plan === 'pro' ? 5000 : 50,
+        monthly_order_limit: PLANS[plan as PlanId]?.maxOrders ?? PLANS.free.maxOrders,
       }).eq('user_id', userId)
       break
     }
@@ -81,7 +87,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('profiles').update({
         plan,
         plan_status: subscription.status === 'active' ? 'active' : 'past_due',
-        monthly_order_limit: plan === 'starter' ? 300 : plan === 'growth' ? 1500 : plan === 'pro' ? 5000 : 50,
+        monthly_order_limit: PLANS[plan as PlanId]?.maxOrders ?? PLANS.free.maxOrders,
       }).eq('stripe_subscription_id', subscription.id)
       break
     }
@@ -91,7 +97,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('profiles').update({
         plan: 'free',
         plan_status: 'cancelled',
-        monthly_order_limit: 50,
+        monthly_order_limit: PLANS.free.maxOrders,
       }).eq('stripe_subscription_id', subscription.id)
       break
     }
