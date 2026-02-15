@@ -27,6 +27,7 @@ import {
   BarChart3,
   Download,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { formatCents, formatPercent } from "@/lib/utils/format";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
@@ -118,7 +119,7 @@ export default async function FinancialsPage({
   const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
 
   // Fetch daily financials for date range and monthly P&L in parallel
-  const [dailyResult, monthlyResult] = await Promise.all([
+  const [dailyResult, monthlyResult, allTimePnlResult] = await Promise.all([
     supabase
       .from("daily_financials")
       .select("*")
@@ -132,10 +133,29 @@ export default async function FinancialsPage({
       .eq("user_id", user.id)
       .eq("year", currentYear)
       .eq("month", currentMonth),
+    supabase
+      .from("monthly_pnl")
+      .select("platform, gross_revenue_cents, profit_cents")
+      .eq("user_id", user.id),
   ]);
 
   const dailyData = dailyResult.data ?? [];
   const monthlyData = monthlyResult.data ?? [];
+
+  // Compute all-time platform margins
+  const platformMarginAgg: Record<string, { revenue: number; profit: number }> = {};
+  for (const row of allTimePnlResult.data ?? []) {
+    const p = row.platform ?? "unknown";
+    if (!platformMarginAgg[p]) platformMarginAgg[p] = { revenue: 0, profit: 0 };
+    platformMarginAgg[p].revenue += row.gross_revenue_cents ?? 0;
+    platformMarginAgg[p].profit += row.profit_cents ?? 0;
+  }
+  const platformMargins = Object.entries(platformMarginAgg)
+    .map(([platform, agg]) => ({
+      platform,
+      marginPct: agg.revenue > 0 ? (agg.profit / agg.revenue) * 100 : 0,
+    }))
+    .sort((a, b) => b.marginPct - a.marginPct);
 
   // If no data at all, show empty state
   if (dailyData.length === 0 && monthlyData.length === 0) {
@@ -310,6 +330,27 @@ export default async function FinancialsPage({
           icon={TrendingUp}
         />
       </div>
+
+      {/* Platform Margin Badges */}
+      {platformMargins.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground mr-1">Platform Margins:</span>
+          {platformMargins.map((pm) => {
+            const color =
+              pm.marginPct > 20
+                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                : pm.marginPct >= 10
+                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+                  : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+            return (
+              <Badge key={pm.platform} variant="outline" className={color}>
+                {pm.platform.charAt(0).toUpperCase() + pm.platform.slice(1)}{" "}
+                {formatPercent(pm.marginPct)}
+              </Badge>
+            );
+          })}
+        </div>
+      )}
 
       {/* Revenue Chart */}
       {chartData.length > 0 && (

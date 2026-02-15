@@ -13,6 +13,7 @@ import {
   Truck,
   Settings,
   Mail,
+  Lightbulb,
   Lock,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Financials", href: "/app/financials", icon: DollarSign, requiredPlan: "starter" },
   { label: "Customers", href: "/app/customers", icon: Users, requiredPlan: "growth" },
   { label: "Bestsellers", href: "/app/bestsellers", icon: TrendingUp, requiredPlan: "growth" },
+  { label: "Insights", href: "/app/insights", icon: Lightbulb, requiredPlan: "growth" },
   { label: "Fulfillment", href: "/app/fulfillment", icon: Truck, requiredPlan: "growth" },
   { label: "Newsletter", href: "/app/newsletter", icon: Mail, requiredPlan: "growth" },
 ]

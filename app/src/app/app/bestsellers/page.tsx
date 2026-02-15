@@ -14,6 +14,7 @@ import {
 import { Lock, Star, TrendingUp, Zap, Target } from "lucide-react";
 import { formatCents, formatPercent } from "@/lib/utils/format";
 import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { ProductProfitChart } from "@/components/dashboard/ProductProfitChart";
 
 function UpgradePrompt() {
   return (
@@ -125,6 +126,34 @@ export default async function BestsellersPage() {
     (products ?? []).map((p) => [p.id, p])
   );
 
+  // Fetch total revenue per product from order_line_items
+  const revenueMap = new Map<string, number>();
+  if (productIds.length > 0) {
+    // Paginate to handle large datasets
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: lineItems } = await supabase
+        .from("order_line_items")
+        .select("product_id, total_cents")
+        .eq("user_id", user.id)
+        .in("product_id", productIds)
+        .range(from, from + pageSize - 1);
+      const items = lineItems ?? [];
+      for (const li of items) {
+        if (li.product_id) {
+          revenueMap.set(
+            li.product_id,
+            (revenueMap.get(li.product_id) ?? 0) + (li.total_cents ?? 0)
+          );
+        }
+      }
+      hasMore = items.length === pageSize;
+      from += pageSize;
+    }
+  }
+
   const allCandidates: BestsellerCandidate[] = candidateList.map((c) => ({
     ...c,
     products: productMap.get(c.product_id) ?? null,
@@ -166,6 +195,22 @@ export default async function BestsellersPage() {
     );
   }
 
+  // Build scatter chart data from top 20 candidates
+  const scatterData = allCandidates
+    .filter(
+      (c) =>
+        c.sales_velocity != null &&
+        c.margin_pct != null &&
+        c.products != null
+    )
+    .slice(0, 20)
+    .map((c) => ({
+      name: c.products!.title,
+      salesVelocity: c.sales_velocity!,
+      marginPct: c.margin_pct!,
+      totalRevenue: revenueMap.get(c.products!.id) ?? 0,
+    }));
+
   return (
     <div className="space-y-8">
       <div>
@@ -176,6 +221,8 @@ export default async function BestsellersPage() {
           Track product performance and identify your next bestsellers.
         </p>
       </div>
+
+      {scatterData.length > 0 && <ProductProfitChart data={scatterData} />}
 
       {STAGE_ORDER.map((stageKey) => {
         const config = STAGE_CONFIG[stageKey];
@@ -268,6 +315,16 @@ export default async function BestsellersPage() {
                             </span>
                             <span className="font-medium">
                               {formatCents(product.price_cents)}
+                            </span>
+                          </div>
+                        )}
+                        {product && revenueMap.has(product.id) && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Total Revenue
+                            </span>
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              {formatCents(revenueMap.get(product.id)!)}
                             </span>
                           </div>
                         )}

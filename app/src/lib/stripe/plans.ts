@@ -35,7 +35,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     maxOrders: 1500,
     syncIntervalMin: 5,
     historyDays: -1,
-    features: ['dashboard', 'basic_kpis', 'orders', 'financials', 'products', 'csv_export', 'crm', 'rfm', 'bestsellers', 'fulfillment', 'webhooks', 'newsletter'],
+    features: ['dashboard', 'basic_kpis', 'orders', 'financials', 'products', 'csv_export', 'crm', 'rfm', 'bestsellers', 'fulfillment', 'webhooks', 'newsletter', 'insights'],
     stripePriceId: process.env.STRIPE_GROWTH_PRICE_ID ?? null,
   },
   pro: {

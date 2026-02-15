@@ -167,6 +167,21 @@ export default async function CustomerDetailPage({
       ? Math.round((customer.total_spent_cents ?? 0) / customer.order_count)
       : 0;
 
+  // Compute estimated annual value
+  let estAnnualValueCents = customer.total_spent_cents ?? 0;
+  if (customer.first_order_at) {
+    const firstOrder = new Date(customer.first_order_at);
+    const nowDate = new Date();
+    const monthsActive =
+      (nowDate.getFullYear() - firstOrder.getFullYear()) * 12 +
+      (nowDate.getMonth() - firstOrder.getMonth());
+    if (monthsActive >= 2) {
+      estAnnualValueCents = Math.round(
+        ((customer.total_spent_cents ?? 0) / monthsActive) * 12
+      );
+    }
+  }
+
   const locationParts = [customer.city, customer.state, customer.country].filter(
     Boolean
   );
@@ -199,7 +214,7 @@ export default async function CustomerDetailPage({
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-sm font-medium">
@@ -254,6 +269,20 @@ export default async function CustomerDetailPage({
               {customer.last_order_at
                 ? formatRelativeTime(customer.last_order_at)
                 : "Never"}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription className="text-sm font-medium">
+              Est. Annual Value
+            </CardDescription>
+            <TrendingUp className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCents(estAnnualValueCents)}
             </div>
           </CardContent>
         </Card>
