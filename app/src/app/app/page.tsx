@@ -30,6 +30,9 @@ import { PlatformBadge } from "@/components/layout/PlatformBadge"
 import type { Platform } from "@/lib/utils/constants"
 import { RealtimeRefresh } from "@/components/dashboard/RealtimeRefresh"
 import { PlatformRevenueChart } from "@/components/dashboard/PlatformRevenueChart"
+import { DateRangePicker } from "@/components/dashboard/DateRangePicker"
+import { LastSyncIndicator } from "@/components/dashboard/LastSyncIndicator"
+import { Suspense } from "react"
 
 function statusColor(status: string) {
   switch (status) {
@@ -55,29 +58,48 @@ function pctChange(current: number, previous: number): number {
   return ((current - previous) / previous) * 100
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
+  const params = await searchParams
   const now = new Date()
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()
 
-  // Fetch current period orders (last 30 days)
+  // Parse date range from searchParams, default to last 30 days
+  const toDate = params.to ? new Date(params.to + "T23:59:59Z") : now
+  const fromDate = params.from
+    ? new Date(params.from + "T00:00:00Z")
+    : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+  const rangeMs = toDate.getTime() - fromDate.getTime()
+  const prevFrom = new Date(fromDate.getTime() - rangeMs)
+  const prevTo = fromDate
+
+  const fromIso = fromDate.toISOString()
+  const toIso = toDate.toISOString()
+  const prevFromIso = prevFrom.toISOString()
+  const prevToIso = prevTo.toISOString()
+
+  // Fetch current period orders
   const { data: currentOrders } = await supabase
     .from("orders")
     .select("total_cents, profit_cents")
     .eq("user_id", user.id)
-    .gte("ordered_at", thirtyDaysAgo)
+    .gte("ordered_at", fromIso)
+    .lte("ordered_at", toIso)
 
-  // Fetch previous period orders (30-60 days ago)
+  // Fetch previous period orders (same-length window before)
   const { data: previousOrders } = await supabase
     .from("orders")
     .select("total_cents, profit_cents")
     .eq("user_id", user.id)
-    .gte("ordered_at", sixtyDaysAgo)
-    .lt("ordered_at", thirtyDaysAgo)
+    .gte("ordered_at", prevFromIso)
+    .lt("ordered_at", prevToIso)
 
   // Calculate KPI values
   const currRevenue = (currentOrders ?? []).reduce((s, o) => s + (o.total_cents ?? 0), 0)
@@ -94,12 +116,15 @@ export default async function DashboardPage() {
   const currMargin = currRevenue > 0 ? (currProfit / currRevenue) * 100 : 0
   const prevMargin = prevRevenue > 0 ? (prevProfit / prevRevenue) * 100 : 0
 
-  // Fetch daily_financials for revenue chart (last 30 days)
+  // Fetch daily_financials for revenue chart
+  const fromDateStr = fromIso.slice(0, 10)
+  const toDateStr = toIso.slice(0, 10)
   const { data: dailyFinancials } = await supabase
     .from("daily_financials")
     .select("date, platform, gross_revenue_cents, order_count")
     .eq("user_id", user.id)
-    .gte("date", thirtyDaysAgo.slice(0, 10))
+    .gte("date", fromDateStr)
+    .lte("date", toDateStr)
     .order("date", { ascending: true })
 
   // Aggregate daily_financials by date (multiple platforms per date)
@@ -124,7 +149,7 @@ export default async function DashboardPage() {
       orders: vals.orders,
     }))
 
-  // Aggregate revenue by platform (last 30 days)
+  // Aggregate revenue by platform
   const platformMap = new Map<string, number>()
   for (const row of dailyFinancials ?? []) {
     platformMap.set(
@@ -160,14 +185,22 @@ export default async function DashboardPage() {
 
   const hasOrders = (recentOrders ?? []).length > 0
 
+  const changeLabel = params.from ? "vs previous period" : "vs last 30 days"
+
   return (
     <div className="space-y-6">
       <RealtimeRefresh userId={user.id} />
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Overview of your POD business performance.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Overview of your POD business performance.
+          </p>
+          <LastSyncIndicator userId={user.id} />
+        </div>
+        <Suspense>
+          <DateRangePicker />
+        </Suspense>
       </div>
 
       {!hasOrders ? (
@@ -189,33 +222,33 @@ export default async function DashboardPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KpiCard
               title="Total Revenue"
               value={formatCents(currRevenue)}
               change={pctChange(currRevenue, prevRevenue)}
-              changeLabel="vs last 30 days"
+              changeLabel={changeLabel}
               icon={DollarSign}
             />
             <KpiCard
               title="Orders"
               value={String(currCount)}
               change={pctChange(currCount, prevCount)}
-              changeLabel="vs last 30 days"
+              changeLabel={changeLabel}
               icon={ShoppingCart}
             />
             <KpiCard
               title="Avg Order Value"
               value={formatCents(currAov)}
               change={pctChange(currAov, prevAov)}
-              changeLabel="vs last 30 days"
+              changeLabel={changeLabel}
               icon={TrendingUp}
             />
             <KpiCard
               title="Profit Margin"
               value={`${currMargin.toFixed(1)}%`}
               change={currMargin - prevMargin}
-              changeLabel="vs last 30 days"
+              changeLabel={changeLabel}
               icon={Percent}
             />
           </div>
@@ -228,7 +261,7 @@ export default async function DashboardPage() {
               <CardHeader>
                 <CardTitle>Revenue Over Time</CardTitle>
                 <CardDescription>
-                  Daily revenue for the last 30 days
+                  Daily revenue for the selected period
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -261,10 +294,10 @@ export default async function DashboardPage() {
                   <TableRow>
                     <TableHead>Order #</TableHead>
                     <TableHead>Platform</TableHead>
-                    <TableHead>Customer</TableHead>
+                    <TableHead className="hidden md:table-cell">Customer</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="hidden md:table-cell">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -284,7 +317,7 @@ export default async function DashboardPage() {
                         <TableCell>
                           <PlatformBadge platform={order.platform as Platform} />
                         </TableCell>
-                        <TableCell>{customerName}</TableCell>
+                        <TableCell className="hidden md:table-cell">{customerName}</TableCell>
                         <TableCell className="text-right">
                           {formatCents(order.total_cents)}
                         </TableCell>
@@ -293,7 +326,7 @@ export default async function DashboardPage() {
                             {order.status ?? "unknown"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden text-muted-foreground md:table-cell">
                           {formatDate(order.ordered_at)}
                         </TableCell>
                       </TableRow>

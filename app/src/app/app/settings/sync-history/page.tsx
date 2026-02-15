@@ -25,7 +25,8 @@ import {
   Clock,
   Loader2,
 } from "lucide-react"
-import { formatDate, formatRelativeTime } from "@/lib/utils/format"
+import { formatRelativeTime } from "@/lib/utils/format"
+import { RetryButton } from "./RetryButton"
 
 const STATUS_FILTERS = ["all", "completed", "failed", "running", "pending"] as const
 type StatusFilter = typeof STATUS_FILTERS[number]
@@ -161,10 +162,11 @@ export default async function SyncHistoryPage({
                   <TableRow>
                     <TableHead>Job Type</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Records</TableHead>
-                    <TableHead>Duration</TableHead>
+                    <TableHead className="hidden text-right md:table-cell">Records</TableHead>
+                    <TableHead className="hidden md:table-cell">Duration</TableHead>
                     <TableHead>Error</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead className="hidden md:table-cell">Created</TableHead>
+                    <TableHead className="w-[70px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -174,17 +176,22 @@ export default async function SyncHistoryPage({
                         {job.job_type.replace(/_/g, " ")}
                       </TableCell>
                       <TableCell>{statusBadge(job.status)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="hidden text-right md:table-cell">
                         {job.records_processed}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="hidden text-muted-foreground md:table-cell">
                         {formatDuration(job.started_at, job.completed_at)}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-sm text-destructive">
                         {job.error_message ?? "---"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="hidden text-muted-foreground md:table-cell">
                         {formatRelativeTime(job.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        {job.status === "failed" && (
+                          <RetryButton jobId={job.id} />
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
