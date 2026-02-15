@@ -14,19 +14,27 @@ def run(user_id: str) -> int:
     """Compute RFM scores and segments. Returns number of customers scored."""
     db = get_client()
 
-    try:
-        customers = (
-            db.table("customers")
-            .select("id, last_order_at, order_count, total_spent_cents")
-            .eq("user_id", user_id)
-            .gt("order_count", 0)
-            .execute()
-        )
-    except Exception as e:
-        log.error("Failed to fetch customers for RFM user=%s: %s", user_id, e)
-        return 0
-
-    rows = customers.data or []
+    # Paginate to get all customers (default limit is 1000)
+    rows: list[dict] = []
+    offset = 0
+    PAGE = 1000
+    while True:
+        try:
+            page = (
+                db.table("customers")
+                .select("id, last_order_at, order_count, total_spent_cents")
+                .eq("user_id", user_id)
+                .gt("order_count", 0)
+                .range(offset, offset + PAGE - 1)
+                .execute()
+            )
+        except Exception as e:
+            log.error("Failed to fetch customers for RFM user=%s offset=%d: %s", user_id, offset, e)
+            break
+        rows.extend(page.data or [])
+        if not page.data or len(page.data) < PAGE:
+            break
+        offset += PAGE
     if not rows:
         return 0
 

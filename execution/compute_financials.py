@@ -4,19 +4,50 @@ Aggregates order data into daily_financials and monthly_pnl tables.
 """
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from supabase_client import get_client
 
 log = logging.getLogger(__name__)
 
 
-def run(user_id: str) -> dict:
-    """Compute financials for user. Returns result dict with days_processed and errors."""
+def run(user_id: str, start_date_override: str | None = None) -> dict:
+    """Compute financials for user. Returns result dict with days_processed and errors.
+
+    Args:
+        user_id: The tenant user ID.
+        start_date_override: Optional ISO date string (YYYY-MM-DD) for backfill start.
+            If None, defaults to 7 days ago (nightly mode).
+            If "auto", queries MIN(ordered_at) from orders for full backfill.
+    """
     db = get_client()
 
-    # Use UTC date to ensure consistency across timezones
     end_date = datetime.now(timezone.utc).date()
-    start_date = end_date - timedelta(days=7)
+
+    if start_date_override == "auto":
+        # Full backfill: find earliest order date
+        try:
+            earliest = (
+                db.table("orders")
+                .select("ordered_at")
+                .eq("user_id", user_id)
+                .order("ordered_at", desc=False)
+                .limit(1)
+                .execute()
+            )
+            if earliest.data and earliest.data[0].get("ordered_at"):
+                start_date = datetime.fromisoformat(
+                    earliest.data[0]["ordered_at"].replace("Z", "+00:00")
+                ).date()
+            else:
+                start_date = end_date - timedelta(days=7)
+        except Exception as e:
+            log.warning("Failed to get earliest order date, falling back to 7 days: %s", e)
+            start_date = end_date - timedelta(days=7)
+    elif start_date_override:
+        start_date = datetime.fromisoformat(start_date_override).date()
+    else:
+        start_date = end_date - timedelta(days=7)
 
     days_processed = 0
     errors: list[str] = []
@@ -90,6 +121,13 @@ def run(user_id: str) -> dict:
                 errors.append(msg)
 
         days_processed += 1
+
+        # Rate limit during large backfills
+        if days_processed % 50 == 0:
+            time.sleep(1)
+
+    log.info("user=%s financials: processed %d days (%s to %s), %d errors",
+             user_id, days_processed, start_date, end_date, len(errors))
 
     # Roll up into monthly_pnl
     _compute_monthly_pnl(db, user_id, start_date, end_date)

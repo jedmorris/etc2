@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import crypto from 'crypto'
 import { decryptToken } from '@/lib/utils/crypto'
+import { rateLimit } from '@/lib/rate-limit'
 
 function getServiceClient() {
   return createServerClient(
@@ -29,6 +30,11 @@ function verifySecret(provided: string | null, stored: string | null): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  if (!rateLimit(ip, 100, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   const uid = request.nextUrl.searchParams.get('uid')
   const secret = request.nextUrl.searchParams.get('secret')
 

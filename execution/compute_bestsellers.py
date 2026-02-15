@@ -16,65 +16,78 @@ def run(user_id: str) -> int:
 
     thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
 
-    # Get all active products for the user
-    try:
-        products = (
-            db.table("products")
-            .select("id, title, printify_production_cost_cents, status")
-            .eq("user_id", user_id)
-            .eq("status", "active")
-            .execute()
-        )
-    except Exception as e:
-        log.error("Failed to fetch products user=%s: %s", user_id, e)
-        return 0
+    # Get all active products for the user (paginated)
+    all_products: list[dict] = []
+    offset = 0
+    PAGE = 1000
+    while True:
+        try:
+            page = (
+                db.table("products")
+                .select("id, title, printify_production_cost_cents, status")
+                .eq("user_id", user_id)
+                .eq("status", "active")
+                .range(offset, offset + PAGE - 1)
+                .execute()
+            )
+        except Exception as e:
+            log.error("Failed to fetch products user=%s offset=%d: %s", user_id, offset, e)
+            break
+        all_products.extend(page.data or [])
+        if not page.data or len(page.data) < PAGE:
+            break
+        offset += PAGE
+
+    products = type("Result", (), {"data": all_products})()
 
     if not products.data:
         return 0
 
-    # Get recent line items with product_id directly (set by sync workers)
-    try:
-        line_items = (
-            db.table("order_line_items")
-            .select("product_id, quantity, total_cents")
-            .eq("user_id", user_id)
-            .not_.is_("product_id", "null")
-            .execute()
-        )
-    except Exception as e:
-        log.error("Failed to fetch line items user=%s: %s", user_id, e)
-        return 0
+    # Get recent order IDs from the last 30 days (paginated)
+    recent_order_ids: set[str] = set()
+    offset = 0
+    while True:
+        try:
+            page = (
+                db.table("orders")
+                .select("id")
+                .eq("user_id", user_id)
+                .gte("ordered_at", thirty_days_ago)
+                .range(offset, offset + PAGE - 1)
+                .execute()
+            )
+        except Exception as e:
+            log.error("Failed to fetch recent orders user=%s offset=%d: %s", user_id, offset, e)
+            break
+        for o in (page.data or []):
+            recent_order_ids.add(o["id"])
+        if not page.data or len(page.data) < PAGE:
+            break
+        offset += PAGE
 
-    # Also need to filter by recent orders — get order IDs from the last 30 days
-    try:
-        recent_orders = (
-            db.table("orders")
-            .select("id")
-            .eq("user_id", user_id)
-            .gte("ordered_at", thirty_days_ago)
-            .execute()
-        )
-    except Exception as e:
-        log.error("Failed to fetch recent orders user=%s: %s", user_id, e)
-        return 0
-
-    recent_order_ids = {o["id"] for o in (recent_orders.data or [])}
     if not recent_order_ids:
         return 0
 
-    # Also fetch line items with order_id to filter by recent
-    try:
-        line_items_with_order = (
-            db.table("order_line_items")
-            .select("product_id, quantity, total_cents, order_id")
-            .eq("user_id", user_id)
-            .not_.is_("product_id", "null")
-            .in_("order_id", list(recent_order_ids))
-            .execute()
-        )
-    except Exception as e:
-        log.error("Failed to fetch recent line items user=%s: %s", user_id, e)
-        return 0
+    # Fetch line items in batches to avoid large IN() clause
+    recent_order_list = list(recent_order_ids)
+    all_recent_line_items: list[dict] = []
+    BATCH = 500
+    for i in range(0, len(recent_order_list), BATCH):
+        batch = recent_order_list[i:i + BATCH]
+        try:
+            batch_result = (
+                db.table("order_line_items")
+                .select("product_id, quantity, total_cents, order_id")
+                .eq("user_id", user_id)
+                .not_.is_("product_id", "null")
+                .in_("order_id", batch)
+                .execute()
+            )
+            all_recent_line_items.extend(batch_result.data or [])
+        except Exception as e:
+            log.error("Failed to fetch line items batch %d user=%s: %s", i, user_id, e)
+
+    line_items_with_order = type("Result", (), {"data": all_recent_line_items})()
 
     # Aggregate by product_id
     product_sales: dict[str, dict] = {}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import crypto from 'crypto'
+import { rateLimit } from '@/lib/rate-limit'
 
 function getServiceClient() {
   return createServerClient(
@@ -61,6 +62,11 @@ function verifyEtsySignature(
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  if (!rateLimit(ip, 100, 60_000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   const body = await request.text()
   const webhookId = request.headers.get('webhook-id')
   const timestamp = request.headers.get('webhook-timestamp')
