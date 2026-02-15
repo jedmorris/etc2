@@ -73,11 +73,12 @@ export async function POST(request: NextRequest) {
     }
 
     const shops = await res.json()
-    const shop = shops[0] // Use first shop
 
-    if (!shop) {
+    if (!Array.isArray(shops) || shops.length === 0) {
       return NextResponse.json({ error: 'No Printify shops found' }, { status: 400 })
     }
+
+    const shop = shops[0]
 
     // Encrypt token before storing
     const encryptedToken = encryptToken(token)

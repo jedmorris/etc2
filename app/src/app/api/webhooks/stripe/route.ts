@@ -30,9 +30,8 @@ export async function POST(request: NextRequest) {
   let event
   try {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 })
+  } catch {
+    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
   const supabase = getServiceClient()

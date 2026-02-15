@@ -27,11 +27,19 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup')
   const isDashboard = request.nextUrl.pathname.startsWith('/app')
+  const isProtectedApi = request.nextUrl.pathname.startsWith('/api') &&
+    !request.nextUrl.pathname.startsWith('/api/webhooks') &&
+    !request.nextUrl.pathname.startsWith('/api/health')
 
   if (!user && isDashboard) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // Defense-in-depth: reject unauthenticated calls to protected API routes
+  if (!user && isProtectedApi) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   if (user && isAuthPage) {

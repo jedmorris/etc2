@@ -12,11 +12,12 @@ describe('GET /api/health', () => {
     expect(body).toHaveProperty('version')
   })
 
-  it('returns status "ok" and valid timestamp', async () => {
+  it('returns valid status and timestamp', async () => {
     const response = await GET()
     const body = await response.json()
 
-    expect(body.status).toBe('ok')
+    expect(['ok', 'degraded']).toContain(body.status)
+    expect(body).toHaveProperty('db')
     expect(new Date(body.timestamp).getTime()).not.toBeNaN()
   })
 })

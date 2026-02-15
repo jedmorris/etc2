@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=31536000; includeSubDomains",
           },
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' js.stripe.com *.posthog.com *.sentry.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: *.supabase.co; connect-src 'self' *.supabase.co js.stripe.com *.posthog.com *.sentry.io; frame-src js.stripe.com; font-src 'self'",
+          },
         ],
       },
     ];
