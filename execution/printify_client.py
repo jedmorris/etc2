@@ -62,7 +62,7 @@ class PrintifyClient:
         page = 1
 
         while True:
-            data = self.get_orders(page=page, limit=100)
+            data = self.get_orders(page=page, limit=50)
             orders = data.get("data", [])
             all_orders.extend(orders)
 
@@ -79,7 +79,7 @@ class PrintifyClient:
         page = 1
 
         while True:
-            data = self.get_products(page=page, limit=100)
+            data = self.get_products(page=page, limit=50)
             products = data.get("data", [])
             all_products.extend(products)
 

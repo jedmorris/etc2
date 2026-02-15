@@ -4,10 +4,13 @@ Uses sync_cursor.printify_products_last_ts for incremental sync.
 """
 
 import logging
+import time
 from printify_client import PrintifyClient
 import supabase_client as sb
 
 log = logging.getLogger(__name__)
+
+BATCH_SIZE = 25  # Upsert in batches to avoid rate limits
 
 
 def run(user_id: str) -> int:
@@ -33,6 +36,8 @@ def run(user_id: str) -> int:
 
     synced = 0
     newest_ts = last_ts
+    batch = []
+
     for product in all_products:
         product_ts = product.get("updated_at") or product.get("created_at", "")
         if product_ts and (not newest_ts or product_ts > newest_ts):
@@ -43,7 +48,6 @@ def run(user_id: str) -> int:
         variants = product.get("variants", [])
         min_cost = min((v.get("cost", 0) for v in variants), default=0)
 
-        # Try to link to existing product by title match
         product_data = {
             "user_id": user_id,
             "title": product.get("title", ""),
@@ -56,11 +60,31 @@ def run(user_id: str) -> int:
             "tags": product.get("tags", []),
         }
 
-        db.table("products").upsert(
-            product_data,
-            on_conflict="user_id,printify_product_id",
-        ).execute()
-        synced += 1
+        # Check if product exists, then update or insert
+        existing_resp = (
+            db.table("products")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("printify_product_id", printify_id)
+            .maybe_single()
+            .execute()
+        )
+
+        try:
+            if existing_resp and existing_resp.data:
+                # Update existing
+                db.table("products").update(product_data).eq("id", existing_resp.data["id"]).execute()
+            else:
+                # Insert new
+                db.table("products").insert(product_data).execute()
+            synced += 1
+        except Exception as e:
+            log.warning("Failed to sync product %s: %s", printify_id, e)
+            continue
+
+        # Brief pause every batch to avoid rate limits
+        if synced % BATCH_SIZE == 0:
+            time.sleep(0.2)
 
     # Save cursor for next incremental sync
     if newest_ts and newest_ts != last_ts:
