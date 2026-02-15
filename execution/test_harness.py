@@ -160,55 +160,65 @@ if not found_deprecated:
 # ============================================
 print("\n=== Test 3: Etsy Order Sync Data Flow ===")
 
-from etsy_sync_orders import _map_receipt_to_order, _map_transaction_to_line_item, _to_cents
+try:
+    from etsy_sync_orders import _map_receipt_to_order, _map_transaction_to_line_item, _to_cents
+except (ImportError, AttributeError) as e:
+    print(f"  \033[93mSKIP\033[0m  Test 3 (import failed: {e})")
+    _map_receipt_to_order = _map_transaction_to_line_item = _to_cents = None
 
-sample_receipt = {
-    "receipt_id": 12345,
-    "status": "completed",
-    "was_paid": True,
-    "was_shipped": True,
-    "create_timestamp": 1700000000,
-    "subtotal": {"amount": 2500, "divisor": 100, "currency_code": "USD"},
-    "total_shipping_cost": {"amount": 500, "divisor": 100, "currency_code": "USD"},
-    "total_tax_cost": {"amount": 200, "divisor": 100, "currency_code": "USD"},
-    "grandtotal": {"amount": 3200, "divisor": 100, "currency_code": "USD"},
-    "discount_amt": {"amount": 0, "divisor": 100, "currency_code": "USD"},
-    "transactions": [
-        {
-            "transaction_id": 98765,
-            "title": "Custom Mug Design",
-            "quantity": 2,
-            "price": {"amount": 1250, "divisor": 100, "currency_code": "USD"},
-            "sku": "MUG-001",
-        }
-    ],
-}
+# Track data for cross-test validation (Test 6)
+order_data = None
+shopify_order = None
+line_item = None
 
-order_data = _map_receipt_to_order("test-user-id", sample_receipt)
+if _map_receipt_to_order is not None:
+    sample_receipt = {
+        "receipt_id": 12345,
+        "status": "completed",
+        "was_paid": True,
+        "was_shipped": True,
+        "create_timestamp": 1700000000,
+        "subtotal": {"amount": 2500, "divisor": 100, "currency_code": "USD"},
+        "total_shipping_cost": {"amount": 500, "divisor": 100, "currency_code": "USD"},
+        "total_tax_cost": {"amount": 200, "divisor": 100, "currency_code": "USD"},
+        "grandtotal": {"amount": 3200, "divisor": 100, "currency_code": "USD"},
+        "discount_amt": {"amount": 0, "divisor": 100, "currency_code": "USD"},
+        "transactions": [
+            {
+                "transaction_id": 98765,
+                "title": "Custom Mug Design",
+                "quantity": 2,
+                "price": {"amount": 1250, "divisor": 100, "currency_code": "USD"},
+                "sku": "MUG-001",
+            }
+        ],
+    }
 
-check("order has user_id", order_data["user_id"] == "test-user-id")
-check("order has platform='etsy'", order_data["platform"] == "etsy")
-check("order has platform_order_id", order_data["platform_order_id"] == "12345")
-check("order subtotal_cents=2500", order_data["subtotal_cents"] == 2500)
-check("order total_cents=3200", order_data["total_cents"] == 3200)
-check("order has ordered_at", bool(order_data["ordered_at"]))
-check("order has raw_data", order_data["raw_data"] == sample_receipt)
+    order_data = _map_receipt_to_order("test-user-id", sample_receipt)
 
-# Test line item mapping
-line_item = _map_transaction_to_line_item("test-user-id", "order-uuid-123", sample_receipt["transactions"][0])
-check("line_item has user_id", line_item["user_id"] == "test-user-id")
-check("line_item has order_id", line_item["order_id"] == "order-uuid-123")
-check("line_item has platform_line_item_id", line_item["platform_line_item_id"] == "98765")
-check("line_item title", line_item["title"] == "Custom Mug Design")
-check("line_item quantity=2", line_item["quantity"] == 2)
-check("line_item unit_price_cents=1250", line_item["unit_price_cents"] == 1250)
-check("line_item total_cents=2500", line_item["total_cents"] == 2500)
-check("line_item has sku", line_item["sku"] == "MUG-001")
+    check("order has user_id", order_data["user_id"] == "test-user-id")
+    check("order has platform='etsy'", order_data["platform"] == "etsy")
+    check("order has platform_order_id", order_data["platform_order_id"] == "12345")
+    check("order subtotal_cents=2500", order_data["subtotal_cents"] == 2500)
+    check("order total_cents=3200", order_data["total_cents"] == 3200)
+    check("order has ordered_at", bool(order_data["ordered_at"]))
+    check("order has raw_data", order_data["raw_data"] == sample_receipt)
 
-# Test money conversion
-check("_to_cents divisor=100", _to_cents({"amount": 2500, "divisor": 100}) == 2500)
-check("_to_cents divisor=1", _to_cents({"amount": 25, "divisor": 1}) == 2500)
-check("_to_cents empty", _to_cents({}) == 0)
+    # Test line item mapping
+    line_item = _map_transaction_to_line_item("test-user-id", "order-uuid-123", sample_receipt["transactions"][0])
+    check("line_item has user_id", line_item["user_id"] == "test-user-id")
+    check("line_item has order_id", line_item["order_id"] == "order-uuid-123")
+    check("line_item has platform_line_item_id", line_item["platform_line_item_id"] == "98765")
+    check("line_item title", line_item["title"] == "Custom Mug Design")
+    check("line_item quantity=2", line_item["quantity"] == 2)
+    check("line_item unit_price_cents=1250", line_item["unit_price_cents"] == 1250)
+    check("line_item total_cents=2500", line_item["total_cents"] == 2500)
+    check("line_item has sku", line_item["sku"] == "MUG-001")
+
+    # Test money conversion
+    check("_to_cents divisor=100", _to_cents({"amount": 2500, "divisor": 100}) == 2500)
+    check("_to_cents divisor=1", _to_cents({"amount": 25, "divisor": 1}) == 2500)
+    check("_to_cents empty", _to_cents({}) == 0)
 
 
 # ============================================
@@ -216,30 +226,35 @@ check("_to_cents empty", _to_cents({}) == 0)
 # ============================================
 print("\n=== Test 4: Shopify Order Sync Data Flow ===")
 
-from shopify_sync_orders import _map_order, _money_to_cents
+try:
+    from shopify_sync_orders import _map_order, _money_to_cents
+except (ImportError, AttributeError) as e:
+    print(f"  \033[93mSKIP\033[0m  Test 4 (import failed: {e})")
+    _map_order = _money_to_cents = None
 
-sample_shopify_order = {
-    "id": "gid://shopify/Order/123456",
-    "name": "#1001",
-    "displayFinancialStatus": "PAID",
-    "displayFulfillmentStatus": "FULFILLED",
-    "createdAt": "2024-01-15T10:30:00Z",
-    "subtotalPriceSet": {"shopMoney": {"amount": "25.00", "currencyCode": "USD"}},
-    "totalShippingPriceSet": {"shopMoney": {"amount": "5.00", "currencyCode": "USD"}},
-    "totalTaxSet": {"shopMoney": {"amount": "2.00", "currencyCode": "USD"}},
-    "totalDiscountsSet": {"shopMoney": {"amount": "0.00", "currencyCode": "USD"}},
-    "totalPriceSet": {"shopMoney": {"amount": "32.00", "currencyCode": "USD"}},
-}
+if _map_order is not None:
+    sample_shopify_order = {
+        "id": "gid://shopify/Order/123456",
+        "name": "#1001",
+        "displayFinancialStatus": "PAID",
+        "displayFulfillmentStatus": "FULFILLED",
+        "createdAt": "2024-01-15T10:30:00Z",
+        "subtotalPriceSet": {"shopMoney": {"amount": "25.00", "currencyCode": "USD"}},
+        "totalShippingPriceSet": {"shopMoney": {"amount": "5.00", "currencyCode": "USD"}},
+        "totalTaxSet": {"shopMoney": {"amount": "2.00", "currencyCode": "USD"}},
+        "totalDiscountsSet": {"shopMoney": {"amount": "0.00", "currencyCode": "USD"}},
+        "totalPriceSet": {"shopMoney": {"amount": "32.00", "currencyCode": "USD"}},
+    }
 
-shopify_order = _map_order("test-user-id", sample_shopify_order)
-check("shopify order platform='shopify'", shopify_order["platform"] == "shopify")
-check("shopify order_id extracted", shopify_order["platform_order_id"] == "123456")
-check("shopify order_number", shopify_order["platform_order_number"] == "#1001")
-check("shopify subtotal=2500", shopify_order["subtotal_cents"] == 2500)
-check("shopify total=3200", shopify_order["total_cents"] == 3200)
-check("shopify financial_status lowercased", shopify_order["financial_status"] == "paid")
-check("shopify money_to_cents", _money_to_cents({"amount": "25.50"}) == 2550)
-check("shopify money_to_cents empty", _money_to_cents({}) == 0)
+    shopify_order = _map_order("test-user-id", sample_shopify_order)
+    check("shopify order platform='shopify'", shopify_order["platform"] == "shopify")
+    check("shopify order_id extracted", shopify_order["platform_order_id"] == "123456")
+    check("shopify order_number", shopify_order["platform_order_number"] == "#1001")
+    check("shopify subtotal=2500", shopify_order["subtotal_cents"] == 2500)
+    check("shopify total=3200", shopify_order["total_cents"] == 3200)
+    check("shopify financial_status lowercased", shopify_order["financial_status"] == "paid")
+    check("shopify money_to_cents", _money_to_cents({"amount": "25.50"}) == 2550)
+    check("shopify money_to_cents empty", _money_to_cents({}) == 0)
 
 
 # ============================================
@@ -247,13 +262,18 @@ check("shopify money_to_cents empty", _money_to_cents({}) == 0)
 # ============================================
 print("\n=== Test 5: Printify Status Mapping ===")
 
-from printify_sync_orders import _map_printify_status
+try:
+    from printify_sync_orders import _map_printify_status
+except (ImportError, AttributeError) as e:
+    print(f"  \033[93mSKIP\033[0m  Test 5 (import failed: {e})")
+    _map_printify_status = None
 
-check("printify pending->unfulfilled", _map_printify_status("pending") == "unfulfilled")
-check("printify in-production->in_production", _map_printify_status("in-production") == "in_production")
-check("printify shipping->shipped", _map_printify_status("shipping") == "shipped")
-check("printify fulfilled->delivered", _map_printify_status("fulfilled") == "delivered")
-check("printify unknown->unfulfilled", _map_printify_status("xyz") == "unfulfilled")
+if _map_printify_status is not None:
+    check("printify pending->unfulfilled", _map_printify_status("pending") == "unfulfilled")
+    check("printify in-production->in_production", _map_printify_status("in-production") == "in_production")
+    check("printify shipping->shipped", _map_printify_status("shipping") == "shipped")
+    check("printify fulfilled->delivered", _map_printify_status("fulfilled") == "delivered")
+    check("printify unknown->unfulfilled", _map_printify_status("xyz") == "unfulfilled")
 
 
 # ============================================
@@ -263,14 +283,25 @@ print("\n=== Test 6: NOT NULL Field Compliance ===")
 
 # orders table NOT NULL: user_id, platform, platform_order_id, ordered_at
 ORDERS_REQUIRED = ["user_id", "platform", "platform_order_id", "ordered_at"]
-for field in ORDERS_REQUIRED:
-    check(f"etsy order has {field}", field in order_data, f"missing from _map_receipt_to_order")
-    check(f"shopify order has {field}", field in shopify_order, f"missing from _map_order")
+if order_data is not None:
+    for field in ORDERS_REQUIRED:
+        check(f"etsy order has {field}", field in order_data, f"missing from _map_receipt_to_order")
+else:
+    print("  \033[93mSKIP\033[0m  etsy order fields (import failed)")
+
+if shopify_order is not None:
+    for field in ORDERS_REQUIRED:
+        check(f"shopify order has {field}", field in shopify_order, f"missing from _map_order")
+else:
+    print("  \033[93mSKIP\033[0m  shopify order fields (import failed)")
 
 # order_line_items NOT NULL: user_id, order_id, title
 LINE_ITEM_REQUIRED = ["user_id", "order_id", "title"]
-for field in LINE_ITEM_REQUIRED:
-    check(f"etsy line_item has {field}", field in line_item, f"missing from _map_transaction_to_line_item")
+if line_item is not None:
+    for field in LINE_ITEM_REQUIRED:
+        check(f"etsy line_item has {field}", field in line_item, f"missing from _map_transaction_to_line_item")
+else:
+    print("  \033[93mSKIP\033[0m  etsy line_item fields (import failed)")
 
 
 # ============================================

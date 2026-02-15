@@ -49,7 +49,9 @@ jobs:
         run: pip install -r execution/requirements.txt
 
       - name: Verify httpx
-        run: python3 -c "import httpx; print(f'httpx {httpx.__version__}'); print(httpx.Client)"
+        run: |
+          python3 -c "import httpx; print(f'httpx {httpx.__version__}'); print(httpx.Client)"
+          cd execution && python3 -c "import sys; print(sys.path); import httpx; print(f'httpx {httpx.__version__} from {httpx.__file__}'); print(httpx.Client)"
 
       - name: Run test harness
         run: cd execution && python3 test_harness.py
