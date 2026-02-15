@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import crypto from 'crypto'
 import { decryptToken } from '@/lib/utils/crypto'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -12,23 +11,6 @@ function getServiceClient() {
   )
 }
 
-/**
- * Verify the webhook secret matches the one stored for this user.
- * The secret is passed as a query parameter when Printify sends the webhook.
- * This prevents forged webhook events since only Printify knows the secret.
- */
-function verifySecret(provided: string | null, stored: string | null): boolean {
-  if (!provided || !stored) return false
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(provided, 'utf8'),
-      Buffer.from(stored, 'utf8')
-    )
-  } catch {
-    return false
-  }
-}
-
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
   if (!rateLimit(ip, 100, 60_000)) {
@@ -36,7 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const uid = request.nextUrl.searchParams.get('uid')
-  const secret = request.nextUrl.searchParams.get('secret')
 
   if (!uid) {
     return NextResponse.json({ error: 'Missing uid' }, { status: 400 })
@@ -47,7 +28,7 @@ export async function POST(request: NextRequest) {
   // Look up the user's connected Printify account and verify webhook secret
   const { data: account } = await supabase
     .from('connected_accounts')
-    .select('user_id, webhook_secret_encrypted, sync_cursor')
+    .select('user_id, webhook_secret_encrypted')
     .eq('user_id', uid)
     .eq('platform', 'printify')
     .eq('status', 'connected')
@@ -57,7 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unknown user or not connected' }, { status: 404 })
   }
 
-  // Decrypt webhook secret from dedicated encrypted field, fallback to legacy sync_cursor
+  // Decrypt webhook secret from stored encrypted field
   let storedSecret: string | null = null
   if (account.webhook_secret_encrypted) {
     try {
@@ -66,13 +47,9 @@ export async function POST(request: NextRequest) {
       storedSecret = null
     }
   }
-  if (!storedSecret) {
-    // Legacy fallback: read from sync_cursor (plaintext)
-    storedSecret = (account.sync_cursor as Record<string, string> | null)?.webhook_secret ?? null
-  }
 
-  if (!verifySecret(secret, storedSecret)) {
-    return NextResponse.json({ error: 'Invalid webhook secret' }, { status: 401 })
+  if (!storedSecret) {
+    return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 401 })
   }
 
   // Parse and validate payload

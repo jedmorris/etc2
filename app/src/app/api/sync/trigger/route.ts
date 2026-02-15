@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   if (jobs.length > 0) {
     const { error } = await supabase.from('sync_jobs').insert(jobs)
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
   }
 

@@ -11,7 +11,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { planId, redirectUrl } = await request.json() as { planId: PlanId; redirectUrl?: string }
+  const { planId, redirectUrl: rawRedirectUrl } = await request.json() as { planId: PlanId; redirectUrl?: string }
+  // Prevent open redirect: must be a relative path, not protocol-relative
+  const redirectUrl = rawRedirectUrl && rawRedirectUrl.startsWith('/') && !rawRedirectUrl.startsWith('//')
+    ? rawRedirectUrl
+    : undefined
   const plan = PLANS[planId]
 
   if (!plan || !plan.stripePriceId) {

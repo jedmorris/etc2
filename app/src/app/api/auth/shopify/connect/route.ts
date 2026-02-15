@@ -15,6 +15,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing shop parameter' }, { status: 400 })
   }
 
+  // SSRF prevention: validate shop is a legitimate myshopify.com domain
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/.test(shop)) {
+    return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 })
+  }
+
   const state = crypto.randomBytes(16).toString('hex')
   const scopes = 'read_orders,read_products,read_customers'
 

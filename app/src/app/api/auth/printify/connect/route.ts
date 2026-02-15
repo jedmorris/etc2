@@ -16,15 +16,14 @@ const WEBHOOK_EVENTS = [
 
 /**
  * Register a webhook with Printify for this shop.
- * The callback URL includes the user_id and a secret for verification.
+ * The callback URL includes the user_id for routing.
  */
 async function registerPrintifyWebhook(
   shopId: string,
   token: string,
-  userId: string,
-  webhookSecret: string
+  userId: string
 ): Promise<void> {
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/printify?uid=${userId}&secret=${webhookSecret}`
+  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/printify?uid=${userId}`
 
   for (const event of WEBHOOK_EVENTS) {
     try {
@@ -99,15 +98,14 @@ export async function POST(request: NextRequest) {
       })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 
     // Register webhooks with Printify (fire-and-forget)
     registerPrintifyWebhook(
       String(shop.id),
       token, // Use plaintext token for API call (before it's discarded)
-      user.id,
-      webhookSecret
+      user.id
     ).catch((err) =>
       console.error('Printify webhook registration failed:', err)
     )
