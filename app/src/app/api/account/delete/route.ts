@@ -25,38 +25,7 @@ export async function DELETE(request: NextRequest) {
 
   const serviceClient = getServiceClient()
 
-  // Delete user data in order (respecting foreign keys)
-  // CASCADE on auth.users will clean up profiles and connected_accounts,
-  // but we explicitly clear sensitive data first
-  const tables = [
-    'newsletter_sync_log',
-    'newsletter_subscribers',
-    'bestseller_candidates',
-    'monthly_pnl',
-    'daily_financials',
-    'platform_fees',
-    'fulfillment_events',
-    'order_line_items',
-    'orders',
-    'etsy_listing_stats',
-    'products',
-    'customer_notes',
-    'customers',
-    'sync_log',
-    'sync_jobs',
-    'rate_limit_tracking',
-    'connected_accounts',
-    'profiles',
-  ] as const
-
-  for (const table of tables) {
-    await serviceClient
-      .from(table)
-      .delete()
-      .eq('user_id', user.id)
-  }
-
-  // Delete the auth user (this is permanent)
+  // Delete the auth user — CASCADE on all user_id FKs handles data cleanup
   const { error } = await serviceClient.auth.admin.deleteUser(user.id)
 
   if (error) {

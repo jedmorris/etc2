@@ -74,17 +74,39 @@ export async function POST(request: NextRequest) {
     'product:publish:started', 'product:deleted',
   ]
 
-  if (ORDER_EVENTS.includes(eventType)) {
+  const jobType = ORDER_EVENTS.includes(eventType)
+    ? 'printify_orders'
+    : PRODUCT_EVENTS.includes(eventType)
+      ? 'printify_products'
+      : null
+
+  if (jobType) {
+    // Idempotency: skip if we've already processed this event
+    if (payload.id) {
+      const { data: existing } = await supabase
+        .from('sync_log')
+        .select('id')
+        .eq('platform', 'printify')
+        .eq('sync_type', payload.id)
+        .maybeSingle()
+
+      if (existing) {
+        return NextResponse.json({ received: true, duplicate: true })
+      }
+
+      await supabase.from('sync_log').insert({
+        user_id: uid,
+        platform: 'printify',
+        sync_type: payload.id,
+        status: 'completed',
+        records_synced: 1,
+        metadata: { event_type: eventType },
+      })
+    }
+
     await supabase.from('sync_jobs').insert({
       user_id: uid,
-      job_type: 'printify_orders',
-      priority: 10,
-      metadata: { trigger: 'webhook', event: eventType, payload_id: payload.id },
-    })
-  } else if (PRODUCT_EVENTS.includes(eventType)) {
-    await supabase.from('sync_jobs').insert({
-      user_id: uid,
-      job_type: 'printify_products',
+      job_type: jobType,
       priority: 10,
       metadata: { trigger: 'webhook', event: eventType, payload_id: payload.id },
     })
