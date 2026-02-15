@@ -43,6 +43,11 @@ for mod_name in MOCK_MODULES:
             mock.InvalidToken = Exception
         elif mod_name == "cryptography.hazmat.primitives.ciphers.aead":
             mock.AESGCM = MagicMock()
+        elif mod_name == "httpx":
+            mock.Client = MagicMock
+            mock.AsyncClient = MagicMock
+            mock.Response = MagicMock
+            mock.HTTPStatusError = type("HTTPStatusError", (Exception,), {})
         elif mod_name == "modal":
             mock.App = MagicMock()
             mock.Image = MagicMock()
