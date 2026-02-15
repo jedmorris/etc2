@@ -18,35 +18,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Lock, Mail, Users, CheckCircle, AlertTriangle } from "lucide-react"
-import { hasFeature, type PlanId } from "@/lib/stripe/plans"
+import { Mail, Users, CheckCircle, AlertTriangle } from "lucide-react"
+import { type PlanId } from "@/lib/stripe/plans"
+import { FeatureGate } from "@/components/FeatureGate"
 import { formatNumber, formatDate } from "@/lib/utils/format"
 import { KpiCard } from "@/components/dashboard/KpiCard"
 import { NewsletterGrowthChart } from "@/components/dashboard/NewsletterGrowthChart"
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Newsletter Sync</CardTitle>
-          <CardDescription>
-            Newsletter subscriber sync and analytics require the Growth plan or
-            above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
 
 function syncLogStatusBadge(status: string) {
   switch (status) {
@@ -85,10 +62,6 @@ export default async function NewsletterPage() {
     .maybeSingle()
 
   const plan = (profile?.plan ?? "free") as PlanId
-
-  if (!hasFeature(plan, "newsletter")) {
-    return <UpgradePrompt />
-  }
 
   // KPI queries
   const { count: totalCount } = await supabase
@@ -144,6 +117,7 @@ export default async function NewsletterPage() {
     .limit(10)
 
   return (
+    <FeatureGate feature="newsletter" plan={plan} featureLabel="Newsletter Sync" requiredPlan="Growth">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -252,5 +226,6 @@ export default async function NewsletterPage() {
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   )
 }

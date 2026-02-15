@@ -24,7 +24,6 @@ import {
   DollarSign,
   CalendarDays,
   TrendingUp,
-  Lock,
 } from "lucide-react";
 import {
   formatCents,
@@ -32,7 +31,8 @@ import {
   formatNumber,
   formatRelativeTime,
 } from "@/lib/utils/format";
-import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { type PlanId } from "@/lib/stripe/plans";
+import { FeatureGate } from "@/components/FeatureGate";
 import { PlatformBadge } from "@/components/layout/PlatformBadge";
 import type { Platform } from "@/lib/utils/constants";
 
@@ -68,30 +68,6 @@ function RfmBadge({ segment }: { segment: string | null }) {
     <Badge variant="outline" className={colorClass}>
       {rfmLabel(segment)}
     </Badge>
-  );
-}
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Customer CRM</CardTitle>
-          <CardDescription>
-            Customer insights and RFM segmentation require the Growth plan or
-            above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
@@ -136,10 +112,6 @@ export default async function CustomerDetailPage({
     .single();
 
   const plan = (profile?.plan ?? "free") as PlanId;
-
-  if (!hasFeature(plan, "crm")) {
-    return <UpgradePrompt />;
-  }
 
   const { data: customer } = await supabase
     .from("customers")
@@ -194,6 +166,7 @@ export default async function CustomerDetailPage({
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
+    <FeatureGate feature="crm" plan={plan} featureLabel="Customer CRM" requiredPlan="Growth">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
@@ -406,5 +379,6 @@ export default async function CustomerDetailPage({
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

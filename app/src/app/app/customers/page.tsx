@@ -18,13 +18,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Lock, Users } from "lucide-react";
+import { Download, Users } from "lucide-react";
 import {
   formatCents,
   formatNumber,
   formatRelativeTime,
 } from "@/lib/utils/format";
-import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { type PlanId } from "@/lib/stripe/plans";
+import { FeatureGate } from "@/components/FeatureGate";
 import { RfmSegmentChart } from "@/components/dashboard/RfmSegmentChart";
 
 const RFM_COLORS: Record<string, string> = {
@@ -62,30 +63,6 @@ function RfmBadge({ segment }: { segment: string | null }) {
   );
 }
 
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Customer CRM</CardTitle>
-          <CardDescription>
-            Customer insights and RFM segmentation require the Growth plan or
-            above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 const PAGE_SIZE = 50;
 
 export default async function CustomersPage({
@@ -109,10 +86,6 @@ export default async function CustomersPage({
     .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
-
-  if (!hasFeature(plan, "crm")) {
-    return <UpgradePrompt />;
-  }
 
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
@@ -153,6 +126,7 @@ export default async function CustomersPage({
     .sort((a, b) => b.count - a.count)
 
   return (
+    <FeatureGate feature="crm" plan={plan} featureLabel="Customer CRM" requiredPlan="Growth">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -270,5 +244,6 @@ export default async function CustomersPage({
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

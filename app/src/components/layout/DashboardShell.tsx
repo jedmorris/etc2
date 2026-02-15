@@ -8,6 +8,7 @@ import type { PlanId } from "@/lib/stripe/plans";
 
 interface DashboardShellProps {
   plan: PlanId;
+  userId?: string;
   userEmail: string;
   userAvatarUrl?: string;
   children: React.ReactNode;
@@ -15,6 +16,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({
   plan,
+  userId,
   userEmail,
   userAvatarUrl,
   children,
@@ -30,7 +32,7 @@ export function DashboardShell({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <AppSidebar plan={plan} />
+      <AppSidebar plan={plan} userId={userId} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <AppHeader
           userEmail={userEmail}

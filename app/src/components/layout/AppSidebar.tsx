@@ -15,6 +15,7 @@ import {
   Mail,
   Lightbulb,
   Lock,
+  Shield,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -64,13 +65,16 @@ function isLocked(plan: PlanId, requiredPlan?: PlanId): boolean {
   return PLAN_RANK[plan] < PLAN_RANK[requiredPlan]
 }
 
+const ADMIN_USER_ID = "865a7d10-48e6-4e5d-8d96-0b2b990eab62"
+
 interface AppSidebarProps {
   plan: PlanId
+  userId?: string
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
 }
 
-export function AppSidebar({ plan, collapsed = false, onCollapsedChange }: AppSidebarProps) {
+export function AppSidebar({ plan, userId, collapsed = false, onCollapsedChange }: AppSidebarProps) {
   const pathname = usePathname()
   const [isCollapsed, setIsCollapsed] = useState(collapsed)
 
@@ -156,6 +160,35 @@ export function AppSidebar({ plan, collapsed = false, onCollapsedChange }: AppSi
 
             return <div key={item.href}>{linkContent}</div>
           })}
+
+          {/* Admin link */}
+          {userId === ADMIN_USER_ID && (() => {
+            const isActive = pathname === "/app/admin" || pathname.startsWith("/app/admin/")
+            const linkContent = (
+              <Link
+                href="/app/admin"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  isCollapsed && "justify-center px-2"
+                )}
+              >
+                <Shield className="size-4 shrink-0" />
+                {!isCollapsed && <span>Admin</span>}
+              </Link>
+            )
+            if (isCollapsed) {
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                  <TooltipContent side="right">Admin</TooltipContent>
+                </Tooltip>
+              )
+            }
+            return <div>{linkContent}</div>
+          })()}
 
           <Separator className="my-2" />
 

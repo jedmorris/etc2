@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { type PlanId } from "@/lib/stripe/plans";
 import { Button } from "@/components/ui/button";
+import { FeatureGate } from "@/components/FeatureGate";
 import {
   Card,
   CardContent,
@@ -23,7 +24,6 @@ import {
   TrendingUp,
   TrendingDown,
   PieChart,
-  Lock,
   BarChart3,
   Download,
 } from "lucide-react";
@@ -31,30 +31,6 @@ import { Badge } from "@/components/ui/badge";
 import { formatCents, formatPercent } from "@/lib/utils/format";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Financial Reports</CardTitle>
-          <CardDescription>
-            P&L reports, fee breakdowns, and revenue analysis require the Starter
-            plan or above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Starter</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 function EmptyState() {
   return (
@@ -98,10 +74,6 @@ export default async function FinancialsPage({
     .maybeSingle();
 
   const plan = (profile?.plan ?? "free") as PlanId;
-
-  if (!hasFeature(plan, "financials")) {
-    return <UpgradePrompt />;
-  }
 
   const params = await searchParams;
   const now = new Date();
@@ -160,15 +132,17 @@ export default async function FinancialsPage({
   // If no data at all, show empty state
   if (dailyData.length === 0 && monthlyData.length === 0) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Financials</h1>
-          <p className="text-muted-foreground">
-            Profit &amp; loss overview for your business.
-          </p>
+      <FeatureGate feature="financials" plan={plan} featureLabel="Financial Reports" requiredPlan="Starter">
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Financials</h1>
+            <p className="text-muted-foreground">
+              Profit &amp; loss overview for your business.
+            </p>
+          </div>
+          <EmptyState />
         </div>
-        <EmptyState />
-      </div>
+      </FeatureGate>
     );
   }
 
@@ -243,6 +217,7 @@ export default async function FinancialsPage({
     .map(([date, vals]) => ({ date, revenue: vals.revenue, orders: vals.orders }));
 
   return (
+    <FeatureGate feature="financials" plan={plan} featureLabel="Financial Reports" requiredPlan="Starter">
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -464,5 +439,6 @@ export default async function FinancialsPage({
         </Card>
       </div>
     </div>
+    </FeatureGate>
   );
 }

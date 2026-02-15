@@ -18,32 +18,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Lock, ArrowLeft } from "lucide-react"
-import { hasFeature, type PlanId } from "@/lib/stripe/plans"
+import { ArrowLeft } from "lucide-react"
+import { type PlanId } from "@/lib/stripe/plans"
+import { FeatureGate } from "@/components/FeatureGate"
 import { formatNumber, formatDate } from "@/lib/utils/format"
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Newsletter Subscribers</CardTitle>
-          <CardDescription>
-            Newsletter subscriber management requires the Growth plan or above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
 
 const STATUS_FILTERS = ["all", "active", "failed", "pending", "unsubscribed"] as const
 type StatusFilter = typeof STATUS_FILTERS[number]
@@ -83,10 +61,6 @@ export default async function NewsletterSubscribersPage({
     .maybeSingle()
 
   const plan = (profile?.plan ?? "free") as PlanId
-
-  if (!hasFeature(plan, "newsletter")) {
-    return <UpgradePrompt />
-  }
 
   const params = await searchParams
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1)
@@ -162,6 +136,7 @@ export default async function NewsletterSubscribersPage({
   }
 
   return (
+    <FeatureGate feature="newsletter" plan={plan} featureLabel="Newsletter Subscribers" requiredPlan="Growth">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -294,5 +269,6 @@ export default async function NewsletterSubscribersPage({
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   )
 }

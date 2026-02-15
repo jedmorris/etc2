@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { hasFeature, type PlanId } from "@/lib/stripe/plans";
-import { Button } from "@/components/ui/button";
+import { type PlanId } from "@/lib/stripe/plans";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -20,7 +19,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Lock,
   Crown,
   Heart,
   AlertTriangle,
@@ -34,30 +32,7 @@ import {
 import { formatCents, formatPercent, formatDate } from "@/lib/utils/format";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { PlatformProfitChart } from "@/components/dashboard/PlatformProfitChart";
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Insights Dashboard</CardTitle>
-          <CardDescription>
-            Advanced analytics and customer insights require the Growth plan or
-            above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+import { FeatureGate } from "@/components/FeatureGate";
 
 const RFM_COLORS: Record<string, string> = {
   champion:
@@ -91,10 +66,6 @@ export default async function InsightsPage() {
     .single();
 
   const plan = (profile?.plan ?? "free") as PlanId;
-
-  if (!hasFeature(plan, "insights")) {
-    return <UpgradePrompt />;
-  }
 
   // Fetch all data in parallel
   const now = new Date();
@@ -238,29 +209,32 @@ export default async function InsightsPage() {
 
   if (!hasData) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
-          <p className="text-muted-foreground">
-            Advanced analytics and customer intelligence.
-          </p>
-        </div>
-        <div className="flex min-h-[40vh] items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-            <BarChart3 className="size-12" />
-            <div>
-              <p className="text-sm font-medium">No data yet</p>
-              <p className="text-xs">
-                Data appears after your first sync and compute run.
-              </p>
+      <FeatureGate feature="insights" plan={plan} featureLabel="Insights Dashboard">
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
+            <p className="text-muted-foreground">
+              Advanced analytics and customer intelligence.
+            </p>
+          </div>
+          <div className="flex min-h-[40vh] items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+              <BarChart3 className="size-12" />
+              <div>
+                <p className="text-sm font-medium">No data yet</p>
+                <p className="text-xs">
+                  Data appears after your first sync and compute run.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </FeatureGate>
     );
   }
 
   return (
+    <FeatureGate feature="insights" plan={plan} featureLabel="Insights Dashboard">
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
@@ -388,5 +362,6 @@ export default async function InsightsPage() {
         </Card>
       )}
     </div>
+    </FeatureGate>
   );
 }

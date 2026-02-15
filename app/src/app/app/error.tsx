@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
+import * as Sentry from "@sentry/nextjs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -14,6 +15,9 @@ export default function DashboardError({
 }) {
   useEffect(() => {
     console.error("Dashboard error:", error)
+    if (Sentry.isInitialized()) {
+      Sentry.captureException(error)
+    }
   }, [error])
 
   return (

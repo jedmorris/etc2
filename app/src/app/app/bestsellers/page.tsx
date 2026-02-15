@@ -2,7 +2,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -11,34 +10,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Lock, Star, TrendingUp, Zap, Target } from "lucide-react";
+import { Star, TrendingUp, Zap, Target } from "lucide-react";
 import { formatCents, formatPercent } from "@/lib/utils/format";
-import { hasFeature, type PlanId } from "@/lib/stripe/plans";
+import { type PlanId } from "@/lib/stripe/plans";
+import { FeatureGate } from "@/components/FeatureGate";
 import { ProductProfitChart } from "@/components/dashboard/ProductProfitChart";
-
-function UpgradePrompt() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Card className="max-w-md text-center">
-        <CardHeader>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-            <Lock className="size-6 text-muted-foreground" />
-          </div>
-          <CardTitle className="mt-4">Bestseller Pipeline</CardTitle>
-          <CardDescription>
-            Identify potential bestsellers and track their performance. Requires
-            the Growth plan or above.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/app/settings/billing">
-            <Button>Upgrade to Growth</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 interface BestsellerCandidate {
   id: string;
@@ -100,10 +76,6 @@ export default async function BestsellersPage() {
     .single();
 
   const plan = (profile?.plan ?? "free") as PlanId;
-
-  if (!hasFeature(plan, "bestsellers")) {
-    return <UpgradePrompt />;
-  }
 
   const { data: candidates } = await supabase
     .from("bestseller_candidates")
@@ -176,6 +148,7 @@ export default async function BestsellersPage() {
 
   if (allCandidates.length === 0) {
     return (
+      <FeatureGate feature="bestsellers" plan={plan} featureLabel="Bestseller Pipeline" requiredPlan="Growth">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
@@ -192,6 +165,7 @@ export default async function BestsellersPage() {
           </CardContent>
         </Card>
       </div>
+      </FeatureGate>
     );
   }
 
@@ -212,6 +186,7 @@ export default async function BestsellersPage() {
     }));
 
   return (
+    <FeatureGate feature="bestsellers" plan={plan} featureLabel="Bestseller Pipeline" requiredPlan="Growth">
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -338,5 +313,6 @@ export default async function BestsellersPage() {
         );
       })}
     </div>
+    </FeatureGate>
   );
 }

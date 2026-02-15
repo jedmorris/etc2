@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Suspense } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { Analytics } from "@/components/Analytics";
+import { Analytics, PostHogProvider } from "@/components/Analytics";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import "@/lib/env";
 import "./globals.css";
 
 const inter = Inter({
@@ -45,11 +47,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ThemeProvider>
-          {children}
-          <Analytics />
-          <OfflineBanner />
-        </ThemeProvider>
+        <PostHogProvider>
+          <ThemeProvider>
+            {children}
+            <Suspense fallback={null}>
+              <Analytics />
+            </Suspense>
+            <OfflineBanner />
+          </ThemeProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

@@ -27,5 +27,26 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npx next lint
+
       - name: Run tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install supabase httpx
+
+      - name: Run test harness
+        run: cd execution && python3 test_harness.py
