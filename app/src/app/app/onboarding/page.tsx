@@ -273,19 +273,31 @@ export default function OnboardingPage() {
       return
     }
 
-    const updates: Record<string, unknown> = {
-      onboarding_completed: true,
-      onboarding_step: "complete",
-    }
     // Only set plan if provided (Stripe webhook may have already set it)
     if (planId) {
-      updates.plan = planId
+      await supabase
+        .from("profiles")
+        .update({ plan: planId })
+        .eq("user_id", user.id)
     }
 
-    await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("user_id", user.id)
+    // Determine connected platforms and trigger sync jobs
+    const connectedPlatforms = (
+      Object.entries(connections) as [string, { status: ConnectionStatus }][]
+    )
+      .filter(([, conn]) => conn.status === "connected")
+      .map(([platform]) => platform)
+
+    try {
+      await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platforms: connectedPlatforms }),
+      })
+    } catch {
+      // Non-blocking — dashboard will still load, sync jobs may be missing
+      console.error("Failed to trigger initial sync jobs")
+    }
 
     router.push("/app")
   }

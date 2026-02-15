@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { Resend } from 'resend'
 import { stripe } from '@/lib/stripe/client'
 import { getPlanByPriceId } from '@/lib/stripe/plans'
 import { createServerClient } from '@supabase/ssr'
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+const FROM_EMAIL = process.env.FROM_EMAIL ?? 'alerts@etc2.com'
 
 // Use service role to bypass RLS for webhook processing
 function getServiceClient() {
@@ -118,9 +122,46 @@ export async function POST(request: NextRequest) {
         ? invoice.parent.subscription_details.subscription
         : (invoice as unknown as Record<string, unknown>).subscription as string | null
       if (subscriptionId) {
-        await supabase.from('profiles').update({
-          plan_status: 'past_due',
-        }).eq('stripe_subscription_id', subscriptionId)
+        const { data: failedProfile } = await supabase.from('profiles')
+          .select('user_id, email')
+          .eq('stripe_subscription_id', subscriptionId)
+          .single()
+
+        if (failedProfile) {
+          await supabase.from('profiles').update({
+            plan_status: 'past_due',
+          }).eq('user_id', failedProfile.user_id)
+
+          // Send payment failure email
+          if (resend && failedProfile.email) {
+            try {
+              await resend.emails.send({
+                from: FROM_EMAIL,
+                to: [failedProfile.email],
+                subject: '[etC2] Payment failed — update billing',
+                html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #1a1a1a;">Payment Failed</h2>
+                  <p>We were unable to process your most recent payment.</p>
+                  <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <p style="color: #991b1b; margin: 0; font-size: 14px;">
+                      Your syncs may be paused until billing is resolved.
+                      Please update your payment method to avoid service interruption.
+                    </p>
+                  </div>
+                  <a href="https://app.etc2.com/app/settings"
+                     style="display: inline-block; background: #18181b; color: white; padding: 12px 24px;
+                            border-radius: 6px; text-decoration: none; margin-top: 16px;">
+                    Update Billing
+                  </a>
+                  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                  <p style="font-size: 12px; color: #9ca3af;">etC2 - POD Analytics for Etsy Sellers</p>
+                </div>`,
+              })
+            } catch {
+              // Non-blocking — payment status already updated
+            }
+          }
+        }
       }
       break
     }

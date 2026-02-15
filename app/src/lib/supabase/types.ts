@@ -17,6 +17,9 @@ export interface Database {
           plan_status: string
           monthly_order_count: number
           monthly_order_limit: number
+          backfill_status: string | null
+          backfill_started_at: string | null
+          backfill_completed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -33,6 +36,9 @@ export interface Database {
           plan_status?: string
           monthly_order_count?: number
           monthly_order_limit?: number
+          backfill_status?: string | null
+          backfill_started_at?: string | null
+          backfill_completed_at?: string | null
         }
         Update: {
           user_id?: string
@@ -47,6 +53,9 @@ export interface Database {
           plan_status?: string
           monthly_order_count?: number
           monthly_order_limit?: number
+          backfill_status?: string | null
+          backfill_started_at?: string | null
+          backfill_completed_at?: string | null
         }
         Relationships: []
       }

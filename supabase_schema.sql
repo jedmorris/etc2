@@ -18,6 +18,9 @@ CREATE TABLE profiles (
   plan_status TEXT NOT NULL DEFAULT 'active',
   monthly_order_count INTEGER NOT NULL DEFAULT 0,
   monthly_order_limit INTEGER NOT NULL DEFAULT 50,
+  backfill_status TEXT DEFAULT NULL,
+  backfill_started_at TIMESTAMPTZ,
+  backfill_completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

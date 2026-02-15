@@ -10,6 +10,10 @@ import rate_limiter
 
 log = logging.getLogger(__name__)
 
+PLAN_WEIGHTS = {"free": 0, "starter": 1, "growth": 2, "pro": 3}
+JOB_TYPE_WEIGHTS = {"orders": 5, "listings": 3, "products": 3, "payments": 2, "customers": 2}
+MAX_CONCURRENT_JOBS = 10
+
 
 def _cleanup_stale_jobs(db: Client, stale_minutes: int = 15) -> None:
     """Mark jobs stuck in 'running' for longer than *stale_minutes* as failed.
@@ -27,9 +31,62 @@ def _cleanup_stale_jobs(db: Client, stale_minutes: int = 15) -> None:
     }).eq("status", "running").lt("started_at", cutoff).execute()
 
 
+def _check_concurrency_cap(db: Client) -> bool:
+    """Return True if under the concurrency cap, False if at/over."""
+    result = (
+        db.table("sync_jobs")
+        .select("id", count="exact")
+        .eq("status", "running")
+        .execute()
+    )
+    running_count = result.count or 0
+    if running_count >= MAX_CONCURRENT_JOBS:
+        log.warning("Concurrency cap reached: %d/%d running jobs", running_count, MAX_CONCURRENT_JOBS)
+        return False
+    return True
+
+
+def _check_plan_limits(db: Client, user_id: str) -> bool:
+    """Check if user is within their plan's order limit.
+
+    Returns True if allowed to proceed, False if limit exceeded on free plan.
+    Paid plans always return True (overage billed separately).
+    """
+    result = (
+        db.table("profiles")
+        .select("plan, monthly_order_count, monthly_order_limit")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return False
+    profile = result.data[0]
+    plan = profile.get("plan", "free")
+    count = profile.get("monthly_order_count", 0)
+    limit = profile.get("monthly_order_limit", 50)
+
+    if count >= limit and plan == "free":
+        return False
+    return True
+
+
+def _compute_priority(plan: str, job_type: str) -> int:
+    """Compute priority score based on plan tier and job type."""
+    plan_weight = PLAN_WEIGHTS.get(plan, 0)
+    # Extract the suffix (e.g., "orders" from "etsy_orders" or "backfill_etsy")
+    suffix = job_type.split("_")[-1] if "_" in job_type else job_type
+    job_weight = JOB_TYPE_WEIGHTS.get(suffix, 1)
+    return plan_weight * 10 + job_weight
+
+
 def process_next_batch(db: Client, batch_size: int = 10):
     """Pick up the next batch of queued sync jobs and process them."""
     _cleanup_stale_jobs(db)
+
+    # Check concurrency cap before fetching any jobs
+    if not _check_concurrency_cap(db):
+        return
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -52,9 +109,14 @@ def process_next_batch(db: Client, batch_size: int = 10):
         job_type = job["job_type"]
         platform = job_type.split("_")[0]
 
-        # Check plan limits
+        # Check plan is active
         if not _check_plan_active(db, user_id):
             _skip_job(db, job["id"], "User plan inactive or past_due")
+            continue
+
+        # Check plan order limits
+        if not _check_plan_limits(db, user_id):
+            _skip_job(db, job["id"], "Plan order limit reached")
             continue
 
         # Check rate limit budget
@@ -82,12 +144,12 @@ def _check_plan_active(db: Client, user_id: str) -> bool:
         db.table("profiles")
         .select("plan_status")
         .eq("user_id", user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
     if not result.data:
         return False
-    return result.data["plan_status"] == "active"
+    return result.data[0]["plan_status"] == "active"
 
 
 def _skip_job(db: Client, job_id: str, reason: str):
@@ -120,6 +182,16 @@ def schedule_initial_jobs(db: Client, user_id: str, platforms: list[str]):
     """Schedule initial sync jobs after user connects platforms.
     Called during onboarding after connections are established.
     """
+    # Look up user's plan for priority weighting
+    profile_result = (
+        db.table("profiles")
+        .select("plan")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    plan = profile_result.data[0]["plan"] if profile_result.data else "free"
+
     jobs = []
     platform_job_types = {
         "etsy": ["etsy_orders", "etsy_listings", "etsy_payments"],
@@ -132,7 +204,7 @@ def schedule_initial_jobs(db: Client, user_id: str, platforms: list[str]):
             jobs.append({
                 "user_id": user_id,
                 "job_type": job_type,
-                "priority": 10,  # High priority for initial sync
+                "priority": _compute_priority(plan, job_type),
             })
 
     if jobs:

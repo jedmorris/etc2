@@ -91,8 +91,59 @@ def run(user_id: str) -> int:
 
     if synced > 0:
         db.rpc("increment_order_count", {"p_user_id": user_id}).execute()
+        _check_and_warn_plan_limit(db, user_id)
 
     return synced
+
+
+def _check_and_warn_plan_limit(db, user_id: str) -> None:
+    """Send a warning email if user is at 90%+ of their plan's order limit."""
+    result = (
+        db.table("profiles")
+        .select("plan, monthly_order_count, monthly_order_limit, email")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return
+    profile = result.data[0]
+    count = profile.get("monthly_order_count", 0)
+    limit = profile.get("monthly_order_limit", 50)
+    email = profile.get("email")
+
+    if not email or limit == 0:
+        return
+
+    if count < limit * 0.9:
+        return
+
+    # Check if we already sent a warning this billing cycle
+    existing = (
+        db.table("sync_log")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("sync_type", "plan_limit_warning")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return
+
+    db.table("sync_log").insert({
+        "user_id": user_id,
+        "platform": "system",
+        "sync_type": "plan_limit_warning",
+        "status": "completed",
+        "records_synced": 0,
+        "metadata": {"count": count, "limit": limit},
+    }).execute()
+
+    try:
+        import email_alerts
+        email_alerts.send_plan_limit_warning(email, profile.get("plan", "free"), count, limit)
+    except Exception:
+        pass  # Non-blocking
 
 
 def _map_order(user_id: str, order: dict) -> dict:

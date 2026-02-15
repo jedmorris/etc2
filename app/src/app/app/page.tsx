@@ -18,11 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  AlertTriangle,
   DollarSign,
+  Loader2,
   ShoppingCart,
   TrendingUp,
   Percent,
 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents, formatDate } from "@/lib/utils/format"
 import { KpiCard } from "@/components/dashboard/KpiCard"
 import { RevenueChart } from "@/components/dashboard/RevenueChart"
@@ -66,6 +69,14 @@ export default async function DashboardPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
+
+  // Check backfill status for banner
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("backfill_status")
+    .eq("user_id", user.id)
+    .single()
+  const backfillStatus = profile?.backfill_status as string | null
 
   const params = await searchParams
   const now = new Date()
@@ -202,6 +213,42 @@ export default async function DashboardPage({
           <DateRangePicker />
         </Suspense>
       </div>
+
+      {backfillStatus === "in_progress" && (
+        <Alert>
+          <Loader2 className="size-4 animate-spin" />
+          <AlertTitle>Syncing your data...</AlertTitle>
+          <AlertDescription>
+            We&apos;re importing your historical data. This may take a few minutes.
+            The dashboard will update automatically.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {backfillStatus === "pending" && (
+        <Alert>
+          <Loader2 className="size-4 animate-spin" />
+          <AlertTitle>Sync queued</AlertTitle>
+          <AlertDescription>
+            Your initial data sync is queued and will begin shortly.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {backfillStatus === "failed" && (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Data sync failed</AlertTitle>
+          <AlertDescription>
+            Something went wrong importing your data. Please check your platform
+            connections in{" "}
+            <Link href="/app/settings" className="underline">
+              Settings
+            </Link>{" "}
+            and try reconnecting.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!hasOrders ? (
         <Card>

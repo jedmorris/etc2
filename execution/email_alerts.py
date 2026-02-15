@@ -12,15 +12,29 @@ FROM_EMAIL = os.getenv("FROM_EMAIL", "alerts@etc2.com")
 APP_NAME = "etC2"
 
 
-def send_sync_failure_alert(user_email: str, job_type: str, error_message: str):
-    """Send an email alerting the user that a sync job failed."""
+def _send_email(to: str, subject: str, html: str) -> None:
+    """Internal helper to send email via Resend."""
     if not RESEND_API_KEY:
-        log.warning("RESEND_API_KEY not set, skipping email alert")
+        log.warning("RESEND_API_KEY not set, skipping email to %s", to)
         return
 
     import resend
     resend.api_key = RESEND_API_KEY
 
+    try:
+        resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        })
+        log.info("Sent email to %s: %s", to, subject)
+    except Exception as e:
+        log.error("Failed to send email to %s: %s", to, e)
+
+
+def send_sync_failure_alert(user_email: str, job_type: str, error_message: str):
+    """Send an email alerting the user that a sync job failed."""
     platform = job_type.split("_")[0].capitalize()
     subject = f"[{APP_NAME}] {platform} sync failed"
 
@@ -41,27 +55,11 @@ def send_sync_failure_alert(user_email: str, job_type: str, error_message: str):
     </div>
     """
 
-    try:
-        resend.Emails.send({
-            "from": FROM_EMAIL,
-            "to": [user_email],
-            "subject": subject,
-            "html": html,
-        })
-        log.info("Sent sync failure alert to %s for %s", user_email, job_type)
-    except Exception as e:
-        log.error("Failed to send email alert to %s: %s", user_email, e)
+    _send_email(user_email, subject, html)
 
 
 def send_welcome_email(user_email: str, display_name: str | None = None):
     """Send a welcome email after signup."""
-    if not RESEND_API_KEY:
-        log.warning("RESEND_API_KEY not set, skipping welcome email")
-        return
-
-    import resend
-    resend.api_key = RESEND_API_KEY
-
     name = display_name or "there"
     subject = f"Welcome to {APP_NAME}!"
 
@@ -85,13 +83,89 @@ def send_welcome_email(user_email: str, display_name: str | None = None):
     </div>
     """
 
-    try:
-        resend.Emails.send({
-            "from": FROM_EMAIL,
-            "to": [user_email],
-            "subject": subject,
-            "html": html,
-        })
-        log.info("Sent welcome email to %s", user_email)
-    except Exception as e:
-        log.error("Failed to send welcome email to %s: %s", user_email, e)
+    _send_email(user_email, subject, html)
+
+
+def send_backfill_complete_alert(user_email: str, records_synced: int):
+    """Send an email when backfill/initial sync is complete."""
+    subject = f"[{APP_NAME}] Your data is ready!"
+
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1a1a1a;">Your data is ready! 🎉</h2>
+      <p>We've finished importing your historical data.</p>
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <p style="color: #166534; margin: 0; font-size: 14px;">
+          <strong>{records_synced:,}</strong> records synced successfully.
+        </p>
+      </div>
+      <p style="font-size: 14px; color: #6b7280;">
+        Head to your dashboard to explore your analytics.
+      </p>
+      <a href="https://app.etc2.com/app"
+         style="display: inline-block; background: #18181b; color: white; padding: 12px 24px;
+                border-radius: 6px; text-decoration: none; margin-top: 16px;">
+        View Dashboard
+      </a>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #9ca3af;">{APP_NAME} - POD Analytics for Etsy Sellers</p>
+    </div>
+    """
+
+    _send_email(user_email, subject, html)
+
+
+def send_plan_limit_warning(user_email: str, plan: str, current_count: int, limit: int):
+    """Send a warning when user is approaching their plan's order limit."""
+    pct = round((current_count / limit) * 100) if limit > 0 else 100
+    subject = f"[{APP_NAME}] Approaching order limit ({pct}% used)"
+
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1a1a1a;">Approaching Order Limit</h2>
+      <p>You've used <strong>{current_count:,}</strong> of your <strong>{limit:,}</strong> monthly orders
+         on the <strong>{plan.capitalize()}</strong> plan.</p>
+      <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <p style="color: #92400e; margin: 0; font-size: 14px;">
+          <strong>{pct}%</strong> of your monthly limit has been used.
+          {" Upgrade to keep syncing without interruption." if plan == "free" else " Contact us if you need a higher limit."}
+        </p>
+      </div>
+      <a href="https://app.etc2.com/app/settings"
+         style="display: inline-block; background: #18181b; color: white; padding: 12px 24px;
+                border-radius: 6px; text-decoration: none; margin-top: 16px;">
+        {"Upgrade Plan" if plan == "free" else "View Settings"}
+      </a>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #9ca3af;">{APP_NAME} - POD Analytics for Etsy Sellers</p>
+    </div>
+    """
+
+    _send_email(user_email, subject, html)
+
+
+def send_payment_failed_alert(user_email: str):
+    """Send an email when a payment fails."""
+    subject = f"[{APP_NAME}] Payment failed — update billing"
+
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1a1a1a;">Payment Failed</h2>
+      <p>We were unable to process your most recent payment.</p>
+      <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
+        <p style="color: #991b1b; margin: 0; font-size: 14px;">
+          Your syncs may be paused until billing is resolved.
+          Please update your payment method to avoid service interruption.
+        </p>
+      </div>
+      <a href="https://app.etc2.com/app/settings"
+         style="display: inline-block; background: #18181b; color: white; padding: 12px 24px;
+                border-radius: 6px; text-decoration: none; margin-top: 16px;">
+        Update Billing
+      </a>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #9ca3af;">{APP_NAME} - POD Analytics for Etsy Sellers</p>
+    </div>
+    """
+
+    _send_email(user_email, subject, html)
