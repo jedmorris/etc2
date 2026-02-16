@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { encryptToken, generateSecret } from '@/lib/utils/crypto'
 import { rateLimit } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 
 const PRINTIFY_API = 'https://api.printify.com/v1'
 
@@ -40,7 +41,7 @@ async function registerPrintifyWebhook(
         }),
       })
     } catch (err) {
-      console.error(`Failed to register Printify webhook ${event}:`, err)
+      logger.error(`Failed to register Printify webhook ${event}:`, err)
     }
   }
 }
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
       token, // Use plaintext token for API call (before it's discarded)
       user.id
     ).catch((err) =>
-      console.error('Printify webhook registration failed:', err)
+      logger.error('Printify webhook registration failed:', err)
     )
 
     // Queue initial sync jobs for Printify orders and products
